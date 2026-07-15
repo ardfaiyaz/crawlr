@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="crawlr-icon-logo.png" alt="crawlr" width="120" />
+  <img src="https://raw.githubusercontent.com/ardfaiyaz/crawlr/main/crawlr-icon-logo.png" alt="crawlr" width="120" />
 </p>
 
 <h1 align="center">crawlr</h1>
@@ -7,6 +7,19 @@
 <p align="center">
   <strong>Crawlr</strong> is an AI-powered, <strong>self-healing</strong> web scraper with an
   e-commerce / price-intelligence vertical.
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/crawlr/"><img src="https://img.shields.io/pypi/v/crawlr?color=2a6833" alt="PyPI version" /></a>
+  <a href="https://pypi.org/project/crawlr/"><img src="https://img.shields.io/pypi/pyversions/crawlr?color=2a6833" alt="Python versions" /></a>
+  <a href="https://github.com/ardfaiyaz/crawlr/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-2a6833" alt="License: MIT" /></a>
+  <a href="https://01crawlr.vercel.app/"><img src="https://img.shields.io/badge/website-live-2a6833" alt="Website" /></a>
+</p>
+
+<p align="center">
+  <a href="https://01crawlr.vercel.app/"><strong>Website</strong></a> &middot;
+  <a href="https://pypi.org/project/crawlr/"><strong>PyPI</strong></a> &middot;
+  <code>pip install crawlr</code>
 </p>
 
 ## Why Crawlr is different
