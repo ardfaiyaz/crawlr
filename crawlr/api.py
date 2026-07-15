@@ -8,11 +8,15 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Form
+from fastapi import Depends, FastAPI, Form, Header, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import BaseModel
 
+from . import config
+from . import digest as digest_mod
 from . import schemas as schema_registry
 from . import storage
+from .extractor import scrape as scrape_url
 from .models import MonitoredSite, TriggerType
 from .monitor import run_once
 
@@ -24,6 +28,37 @@ async def _lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Crawlr", version="0.2.0", lifespan=_lifespan)
+
+
+def require_api_key(
+    x_api_key: str | None = Header(None),
+    authorization: str | None = Header(None),
+) -> None:
+    """Gate the JSON API behind CRAWLR_API_KEY when it is configured."""
+    key = config.API_KEY
+    if not key:
+        return  # open when no key is set (local use)
+    supplied = x_api_key
+    if not supplied and authorization and authorization.lower().startswith("bearer "):
+        supplied = authorization.split(" ", 1)[1]
+    if supplied != key:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
+_AUTH = [Depends(require_api_key)]
+
+
+class ScrapeRequest(BaseModel):
+    url: str
+    schema_name: str = "product"
+
+
+class WatchRequest(BaseModel):
+    url: str
+    schema_name: str = "product"
+    trigger: str = "any_change"
+    target_price: float | None = None
+    interval: int = 60
 
 # Friendly labels for the trigger filter dropdown.
 _TRIGGER_LABELS = {
@@ -41,34 +76,73 @@ _TRIGGER_LABELS = {
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/sites")
+@app.get("/api/sites", dependencies=_AUTH)
 def api_sites() -> list[dict]:
     return storage.list_sites()
 
 
-@app.get("/api/watchlist")
+@app.get("/api/watchlist", dependencies=_AUTH)
 def api_watchlist() -> list[dict]:
     return storage.watchlist()
 
 
-@app.get("/api/sites/{site_id}/records")
+@app.get("/api/sites/{site_id}/records", dependencies=_AUTH)
 def api_records(site_id: int) -> list[dict]:
     return storage.latest_records(site_id)
 
 
-@app.get("/api/sites/{site_id}/history")
+@app.get("/api/sites/{site_id}/history", dependencies=_AUTH)
 def api_history(site_id: int, item_key: str, field: str = "price") -> list[dict]:
     return storage.price_history(site_id, item_key, field)
 
 
-@app.get("/api/changes")
+@app.get("/api/changes", dependencies=_AUTH)
 def api_changes(site_id: int | None = None, limit: int = 50) -> list[dict]:
     return storage.recent_changes(site_id, limit)
 
 
-@app.get("/api/schemas")
+@app.get("/api/schemas", dependencies=_AUTH)
 def api_schemas() -> list[dict]:
     return schema_registry.available()
+
+
+@app.get("/api/stats", dependencies=_AUTH)
+def api_stats() -> list[dict]:
+    return storage.site_stats()
+
+
+@app.get("/api/digest", dependencies=_AUTH)
+def api_digest(hours: int = 24) -> dict:
+    return digest_mod.build(hours)
+
+
+@app.post("/api/scrape", dependencies=_AUTH)
+def api_scrape(req: ScrapeRequest) -> dict:
+    schema = schema_registry.resolve(req.schema_name)
+    if schema is None:
+        raise HTTPException(status_code=400, detail=f"unknown schema '{req.schema_name}'")
+    return scrape_url(req.url, schema).model_dump(mode="json")
+
+
+@app.post("/api/watch", dependencies=_AUTH)
+def api_watch(req: WatchRequest) -> dict:
+    schema = schema_registry.resolve(req.schema_name)
+    if schema is None:
+        raise HTTPException(status_code=400, detail=f"unknown schema '{req.schema_name}'")
+    try:
+        trigger = TriggerType(req.trigger)
+    except ValueError:
+        trigger = TriggerType.ANY_CHANGE
+    site_id = storage.add_site(
+        MonitoredSite(
+            url=req.url,
+            schema_name=req.schema_name,
+            interval_minutes=req.interval,
+            trigger=trigger,
+            target_price=req.target_price,
+        )
+    )
+    return {"id": site_id, "url": req.url, "schema": req.schema_name, "trigger": trigger.value}
 
 
 # ---------------------------------------------------------------------------

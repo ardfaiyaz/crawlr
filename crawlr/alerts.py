@@ -15,11 +15,33 @@ import smtplib
 from email.mime.text import MIMEText
 
 import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .config import ALERTS
 from .models import PriceChange
 
 logger = logging.getLogger("crawlr.alerts")
+
+
+def configured_sinks() -> list[str]:
+    """Names of the alert sinks that are currently configured."""
+    sinks: list[str] = []
+    if ALERTS.webhook_url:
+        sinks.append("webhook")
+    if ALERTS.slack_webhook_url:
+        sinks.append("slack")
+    if ALERTS.email_to and ALERTS.smtp_host:
+        sinks.append("email")
+    if ALERTS.console:
+        sinks.append("console")
+    return sinks
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, max=4), reraise=True)
+def _post_json(url: str, payload: dict) -> None:
+    """POST JSON with a few retries for transient network failures."""
+    with httpx.Client(timeout=15) as client:
+        client.post(url, json=payload).raise_for_status()
 
 _PRICE_FIELDS = {"price"}
 _BACK_IN_STOCK = {"in stock", "instock", "available", "in_stock"}
@@ -108,16 +130,14 @@ def send_message(subject: str, lines: list[str], payload_extra: dict | None = No
 def _send_webhook(payload: dict) -> None:
     if not ALERTS.webhook_url:
         return
-    with httpx.Client(timeout=15) as client:
-        client.post(ALERTS.webhook_url, json=payload).raise_for_status()
+    _post_json(ALERTS.webhook_url, payload)
 
 
 def _send_slack(subject: str, lines: list[str]) -> None:
     if not ALERTS.slack_webhook_url:
         return
     text = f"*{subject}*\n" + "\n".join(f"• {line}" for line in lines)
-    with httpx.Client(timeout=15) as client:
-        client.post(ALERTS.slack_webhook_url, json={"text": text}).raise_for_status()
+    _post_json(ALERTS.slack_webhook_url, {"text": text})
 
 
 def _send_email(subject: str, body: str) -> None:
