@@ -68,6 +68,10 @@ CREATE TABLE IF NOT EXISTS changes (
     new_value TEXT,
     changed_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS selectors (
+    cache_key TEXT PRIMARY KEY,
+    schema_json TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_records_site ON records(site_id, item_key, fetched_at);
 CREATE INDEX IF NOT EXISTS idx_changes_site ON changes(site_id, changed_at);
 """
@@ -78,10 +82,47 @@ def q(sql: str) -> str:
     return sql.replace("?", PH) if BACKEND == "postgres" else sql
 
 
+# Lazily-created Postgres connection pool (only when psycopg_pool is available).
+_PG_POOL = None
+
+
+def _pg_pool():
+    """Return a shared psycopg connection pool, or None if pooling isn't available.
+
+    Pooling avoids paying the TCP + auth handshake on every query, which matters
+    under the concurrent async monitor runner. It's optional: without the
+    `psycopg_pool` package we fall back to opening a fresh connection per call.
+    """
+    global _PG_POOL
+    if _PG_POOL is not None:
+        return _PG_POOL
+    try:
+        from psycopg.rows import dict_row
+        from psycopg_pool import ConnectionPool
+    except ImportError:
+        return None
+    _PG_POOL = ConnectionPool(
+        config.DATABASE_URL,
+        min_size=1,
+        max_size=max(1, config.PG_POOL_MAX),
+        kwargs={"row_factory": dict_row},
+        open=True,
+    )
+    return _PG_POOL
+
+
 @contextmanager
 def connect() -> Iterator:
     """Yield a connection with dict-style row access, committing on success."""
     if BACKEND == "postgres":
+        pool = _pg_pool()
+        if pool is not None:
+            # The pool's context manager commits on success, rolls back on error,
+            # and returns the connection to the pool on exit.
+            with pool.connection() as conn:
+                yield conn
+            return
+
         import psycopg
         from psycopg.rows import dict_row
 
@@ -96,6 +137,9 @@ def connect() -> Iterator:
 
         conn = sqlite3.connect(config.DB_PATH, timeout=10)
         conn.row_factory = sqlite3.Row
+        # WAL lets readers and a writer proceed concurrently (readers never block
+        # the writer and vice-versa) — important for the async monitor runner.
+        conn.execute("PRAGMA journal_mode=WAL")
         # Tolerate brief write contention from the concurrent async runner.
         conn.execute("PRAGMA busy_timeout=5000")
         try:

@@ -16,25 +16,17 @@ from __future__ import annotations
 
 import yaml
 
-from . import config
+from . import config, normalize
 from .models import PriceChange, TriggerType
-
-_IN_STOCK = ("in stock", "in-stock", "in_stock", "instock", "available", "add to cart")
-_OUT_OF_STOCK = ("out of stock", "out-of-stock", "sold out", "unavailable", "backorder")
 
 
 def is_in_stock(value) -> bool | None:
-    """Interpret availability text; None when it can't be determined."""
-    if value is None:
-        return None
-    text = str(value).strip().lower()
-    if not text:
-        return None
-    if any(k in text for k in _OUT_OF_STOCK):
-        return False
-    if any(k in text for k in _IN_STOCK):
-        return True
-    return None
+    """Interpret availability text; None when it can't be determined.
+
+    Delegates to :func:`normalize.normalize_stock` so stock parsing lives in
+    exactly one place (single source of truth for availability semantics).
+    """
+    return normalize.normalize_stock(value)
 
 
 def _to_float(value) -> float | None:
