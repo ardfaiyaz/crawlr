@@ -14,7 +14,10 @@ Commands:
 
 from __future__ import annotations
 
+import csv
+import io
 import json
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -288,6 +291,89 @@ def validate_schema(path: str = typer.Argument(..., help="Path to a YAML/JSON sc
     color = "green" if ok else "red"
     console.print(f"[{color}]{message}[/{color}]")
     if not ok:
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def stats() -> None:
+    """Show per-site health: runs, average confidence, self-heals."""
+    storage.init_db()
+    rows = storage.site_stats()
+    if not rows:
+        console.print("[dim]No sites yet.[/dim]")
+        return
+    table = Table("ID", "URL", "Runs", "Avg confidence", "Self-heals", "LLM runs")
+    for r in rows:
+        avg = f"{r['avg_confidence']:.0%}" if r.get("avg_confidence") is not None else "-"
+        table.add_row(
+            str(r["id"]), _fmt(r["url"]), str(r["runs"] or 0), avg,
+            str(r["heals"] or 0), str(r["llm_runs"] or 0),
+        )
+    console.print(table)
+
+
+@app.command()
+def export(
+    fmt: str = typer.Option("json", "--format", help="json | csv"),
+    out: str = typer.Option(None, help="Write to this file instead of stdout"),
+    site_id: int = typer.Option(None, "--site", help="Only export this site id"),
+) -> None:
+    """Export watchlist data (price/stock) as JSON or CSV."""
+    storage.init_db()
+    rows = storage.watchlist()
+    if site_id is not None:
+        rows = [r for r in rows if r["id"] == site_id]
+    if fmt == "csv":
+        buf = io.StringIO()
+        if rows:
+            writer = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        text = buf.getvalue()
+    else:
+        text = json.dumps(rows, indent=2, default=str)
+    if out:
+        Path(out).write_text(text)
+        console.print(f"[green]Wrote {len(rows)} row(s) to {out}[/green]")
+    else:
+        print(text)
+
+
+@app.command()
+def replay(
+    url: str = typer.Argument(..., help="URL whose archived snapshot to re-extract"),
+    schema: str = typer.Option("product", help="Schema name"),
+) -> None:
+    """Re-extract from the last archived HTML snapshot (no network)."""
+    from . import archive
+    from .extractor import reextract
+
+    html = archive.load_latest(url, schema)
+    if not html:
+        console.print(f"[red]No snapshot for {url} (schema={schema}). Scrape it first.[/red]")
+        raise typer.Exit(code=1)
+    result = reextract(url, _schema(schema), html)
+    _print_records(result.records, title=f"{result.count} record(s) from snapshot")
+    _print_quality(result)
+
+
+@app.command(name="eval")
+def eval_cmd(min: float = typer.Option(0.9, help="Minimum accuracy to pass")) -> None:
+    """Run the golden-fixture accuracy evaluation (regression gate)."""
+    from .eval import run_eval
+
+    r = run_eval()
+    color = "green" if r["accuracy"] >= min else "red"
+    console.print(
+        f"[{color}]Accuracy {r['accuracy']:.0%}[/{color}] "
+        f"({r['passed']}/{r['checks']} checks across {r['cases']} case(s))"
+    )
+    for f in r["failures"]:
+        console.print(
+            f"  [red]x[/red] {f['case']} :: {f['field']}: "
+            f"expected {f['expected']!r}, got {f['got']!r}"
+        )
+    if r["accuracy"] < min:
         raise typer.Exit(code=1)
 
 
