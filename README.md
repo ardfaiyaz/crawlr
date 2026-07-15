@@ -115,9 +115,19 @@ Modules:
 
 ## Install
 
+Install the CLI in one line — no clone needed:
+
+```bash
+pipx install "git+https://github.com/ardfaiyaz/crawlr.git"
+# once published to PyPI:
+pipx install crawlr        # or: pip install crawlr
+```
+
+For development (from a clone):
+
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e .
+pip install -e '.[dev]'
 # optional extras
 pip install -e '.[js]' && playwright install chromium   # JS rendering
 pip install -e '.[postgres]'                              # Postgres backend
@@ -204,6 +214,26 @@ The test suite runs fully offline (no network, no LLM key): `fetch` is
 monkeypatched with local fixtures and selector generation uses the heuristic
 path. The same portable SQL is exercised on SQLite in CI and on Postgres in
 production.
+
+## Releasing to PyPI
+
+Publishing is automated via GitHub Actions using **PyPI Trusted Publishing**
+(OIDC — no API tokens to manage). One-time setup:
+
+1. On PyPI, create the project (or add a *pending publisher*) under
+   **Publishing → GitHub**, with: owner `ardfaiyaz`, repo `crawlr`,
+   workflow `publish.yml`, environment `pypi`.
+2. Then cut a release by pushing a version tag:
+
+   ```bash
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+The workflow builds the sdist + wheel, runs `twine check`, and publishes to PyPI.
+
+> Note: confirm the `crawlr` name is available on PyPI first. If it's taken,
+> change `name` in `pyproject.toml` (the CLI command can stay `crawlr`).
 
 ## Website &amp; docs
 
