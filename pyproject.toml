@@ -4,6 +4,31 @@ version = "0.1.0"
 description = "Crawlr: an AI-powered, self-healing web scraper with an e-commerce price-intelligence vertical"
 readme = "README.md"
 requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Ard Tree" }]
+keywords = [
+    "web-scraping",
+    "scraper",
+    "price-monitoring",
+    "price-intelligence",
+    "ecommerce",
+    "self-healing",
+    "cli",
+    "llm",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "httpx>=0.27",
     "selectolax>=0.3.21",
@@ -24,6 +49,11 @@ js = ["playwright>=1.44"]
 postgres = ["psycopg[binary]>=3.1"]
 dev = ["pytest>=8.2", "ruff>=0.4", "mypy>=1.10"]
 
+[project.urls]
+Homepage = "https://github.com/ardfaiyaz/crawlr"
+Repository = "https://github.com/ardfaiyaz/crawlr"
+Issues = "https://github.com/ardfaiyaz/crawlr/issues"
+
 [project.scripts]
 crawlr = "crawlr.cli:app"
 
@@ -33,6 +63,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["crawlr"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/crawlr", "/README.md", "/LICENSE", "/pyproject.toml"]
 
 [tool.ruff]
 line-length = 100
