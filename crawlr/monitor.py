@@ -13,7 +13,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Callable
 
-from . import alerts, db, normalize, storage, triggers
+from . import alerts, config, db, normalize, storage, triggers
 from .config import MAX_PRICE_CHANGE_FACTOR, MIN_FIELD_CONFIDENCE
 from .extractor import scrape
 from .models import ExtractionResult, ExtractionSchema, PriceChange
@@ -122,6 +122,11 @@ def run_once(
             to_alert = triggers.filter_changes(site, changes)
             if to_alert:
                 alerts.notify(site["url"], to_alert)
+
+    # Cap stored history per site when a retention window is configured. Runs
+    # after diffing/recording so change detection always sees the prior run.
+    if config.RETENTION_RUNS > 0:
+        storage.prune_site_runs(site_id, config.RETENTION_RUNS)
 
     return result, changes
 

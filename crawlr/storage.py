@@ -109,6 +109,8 @@ def record_run(
                VALUES (?, ?, ?, ?, ?, ?)""",
             (site_id, ts, len(records), int(healed), int(used_llm), float(confidence)),
         )
+        if run_id is None:
+            raise RuntimeError("failed to record run (no insert id returned)")
         for rec in records:
             item_key = str(rec.get(key_field)) if key_field and rec.get(key_field) else None
             conn.execute(
@@ -118,7 +120,32 @@ def record_run(
                 ),
                 (run_id, site_id, item_key, json.dumps(rec), ts),
             )
-        return int(run_id)
+        return run_id
+
+
+def prune_site_runs(site_id: int, keep_runs: int) -> int:
+    """Delete all but the ``keep_runs`` most recent runs (and their records) for a site.
+
+    Time-series records accumulate unbounded under continuous monitoring; this
+    caps per-site history so long-running deployments don't grow without limit.
+    Returns the number of runs deleted; ``keep_runs <= 0`` is a no-op (keep all).
+    """
+    if keep_runs <= 0:
+        return 0
+    with db.connect() as conn:
+        rows = conn.execute(
+            db.q("SELECT id FROM runs WHERE site_id=? ORDER BY fetched_at DESC, id DESC"),
+            (site_id,),
+        ).fetchall()
+        old_ids = [r["id"] for r in rows[keep_runs:]]
+        if not old_ids:
+            return 0
+        placeholders = ",".join(db.PH for _ in old_ids)
+        conn.execute(
+            f"DELETE FROM records WHERE run_id IN ({placeholders})", tuple(old_ids)
+        )
+        conn.execute(f"DELETE FROM runs WHERE id IN ({placeholders})", tuple(old_ids))
+        return len(old_ids)
 
 
 def latest_run(site_id: int) -> dict | None:

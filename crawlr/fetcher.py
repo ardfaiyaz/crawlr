@@ -11,6 +11,7 @@ Resilience features:
 
 from __future__ import annotations
 
+import atexit
 import itertools
 import random
 import time
@@ -75,6 +76,29 @@ _robots: dict[str, RobotFileParser | None] = {}
 _proxy_cycle = itertools.cycle(ANTIBOT.proxies) if ANTIBOT.proxies else None
 
 
+# Reused HTTP client for the common no-proxy path so connections (and TLS
+# handshakes) are pooled across many requests instead of reopened every fetch.
+# When proxies are configured we open a per-request client so rotation works.
+_shared_client: httpx.Client | None = None
+
+
+def _get_shared_client() -> httpx.Client:
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = httpx.Client(
+            timeout=FETCH.timeout_seconds, follow_redirects=True
+        )
+    return _shared_client
+
+
+@atexit.register
+def _close_shared_client() -> None:  # pragma: no cover - process teardown
+    global _shared_client
+    if _shared_client is not None:
+        _shared_client.close()
+        _shared_client = None
+
+
 def _next_proxy() -> str | None:
     return next(_proxy_cycle) if _proxy_cycle is not None else None
 
@@ -118,10 +142,10 @@ def _robots_allows(url: str) -> bool:
                 _robots[host] = rp
         except Exception:
             _robots[host] = None
-    rp = _robots[host]
-    if rp is None:
+    parser = _robots[host]
+    if parser is None:
         return True
-    return rp.can_fetch(FETCH.user_agent, url)
+    return parser.can_fetch(FETCH.user_agent, url)
 
 
 def _looks_like_js_shell(html: str) -> bool:
@@ -144,10 +168,8 @@ def _looks_like_js_shell(html: str) -> bool:
 def _fetch_static(url: str) -> FetchResult:
     headers = {"User-Agent": _pick_user_agent(), "Accept": "text/html,application/xhtml+xml"}
     proxy = _next_proxy()
-    with httpx.Client(
-        headers=headers, timeout=FETCH.timeout_seconds, follow_redirects=True, proxy=proxy
-    ) as client:
-        resp = client.get(url)
+
+    def _handle(resp: httpx.Response) -> FetchResult:
         # Don't retry-storm on auth/rate-limit/forbidden — surface as a block.
         if resp.status_code in (401, 403, 429):
             return FetchResult(
@@ -156,6 +178,18 @@ def _fetch_static(url: str) -> FetchResult:
             )
         resp.raise_for_status()
         return FetchResult(url=str(resp.url), html=resp.text, status_code=resp.status_code)
+
+    if proxy is None:
+        # Reuse the shared, connection-pooled client (headers passed per request
+        # so optional User-Agent rotation still applies).
+        resp = _get_shared_client().get(url, headers=headers)
+        return _handle(resp)
+
+    # A proxy is configured: use a dedicated client so rotation takes effect.
+    with httpx.Client(
+        headers=headers, timeout=FETCH.timeout_seconds, follow_redirects=True, proxy=proxy
+    ) as client:
+        return _handle(client.get(url))
 
 
 def _fetch_js(url: str) -> FetchResult:
