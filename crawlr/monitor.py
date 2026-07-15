@@ -13,7 +13,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Callable
 
-from . import alerts, db, storage, triggers
+from . import alerts, db, normalize, storage, triggers
+from .config import MAX_PRICE_CHANGE_FACTOR
 from .extractor import scrape
 from .models import ExtractionResult, ExtractionSchema, PriceChange
 
@@ -107,6 +108,8 @@ def run_once(
     if previous:
         prev_clean = [{k: v for k, v in r.items() if k != "item_key"} for r in previous]
         changes = diff_records(prev_clean, result.records, key_field, watch)
+        # Plausibility guard: drop absurd price moves (likely extraction errors).
+        changes = [c for c in changes if _plausible_change(c)]
         storage.record_changes(site_id, changes)
         if send_alerts and changes:
             # Only alert on changes matching the site's trigger / rules template.
@@ -115,6 +118,20 @@ def run_once(
                 alerts.notify(site["url"], to_alert)
 
     return result, changes
+
+
+def _plausible_change(change: PriceChange) -> bool:
+    """Reject implausible price moves (0/negative, or beyond the max factor)."""
+    if change.field != "price":
+        return True
+    new = normalize.normalize_number(change.new_value)
+    if new is None or new <= 0:
+        return False
+    old = normalize.normalize_number(change.old_value)
+    if old is None or old <= 0:
+        return True
+    ratio = new / old
+    return (1.0 / MAX_PRICE_CHANGE_FACTOR) <= ratio <= MAX_PRICE_CHANGE_FACTOR
 
 
 def _minutes_since_last_run(site_id: int, now: datetime) -> float:

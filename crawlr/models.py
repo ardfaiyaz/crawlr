@@ -78,6 +78,8 @@ class ExtractionResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     # Fraction (0..1) of required-field cells populated across all records.
     confidence: float = 1.0
+    # Per-field confidence (0..1) from structured-data vs selector consensus.
+    field_confidence: dict = Field(default_factory=dict)
     # False when any record fails schema validation.
     valid: bool = True
 
