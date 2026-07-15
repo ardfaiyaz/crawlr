@@ -27,6 +27,10 @@ SCHEMA_DIR = Path(os.getenv("CRAWLR_SCHEMA_DIR", str(DATA_DIR / "schemas"))).res
 # User-editable rules template: "in circumstance X, do action Y" for alerts.
 RULES_FILE = Path(os.getenv("CRAWLR_RULES_FILE", "crawlr.rules.yaml")).resolve()
 
+# Plausibility guard: price changes beyond this factor (e.g. >20x or <1/20x) are
+# treated as likely extraction errors and suppressed from alerts.
+MAX_PRICE_CHANGE_FACTOR = float(os.getenv("CRAWLR_MAX_PRICE_FACTOR", "20"))
+
 
 def _split_csv(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
