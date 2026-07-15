@@ -29,6 +29,58 @@ Crawlr detects it and **regenerates the selectors automatically** (self-healing)
 - **Dashboard** with add-site form, run-now buttons, health indicators, and price-history sparklines.
 - **Pluggable storage:** SQLite by default, Postgres via `CRAWLR_DATABASE_URL`; Docker + docker-compose included.
 
+## Watchlist — the easy way
+
+Track a competitor's price and stock in one command:
+
+```bash
+crawlr watch "https://store.com/product/123"                 # track price + stock
+crawlr watch "https://store.com/product/123" --target 25     # alert at/below $25
+crawlr watch "https://store.com/product/123" --restock       # alert when back in stock
+crawlr watchlist                                             # see current price, movement, stock
+crawlr monitor --daemon                                      # keep checking in the background
+```
+
+Or use the **dashboard** (`crawlr serve`) — a black‑and‑white, iOS‑styled watchlist: paste a
+product URL, pick a **trigger** from the dropdown (the filter for when you want to be alerted),
+optionally set a target price, and click **Watch**.
+
+### Trigger filter
+
+Choose per watch (CLI `--trigger` or the dashboard dropdown):
+
+| Trigger | Alerts when |
+|---------|-------------|
+| `any_change` | any watched field changes |
+| `price_drop` | the price goes down |
+| `price_below` | price is at/below your target |
+| `price_above` | price is at/above your target |
+| `back_in_stock` | the item becomes available |
+| `out_of_stock` | the item sells out |
+
+### Rules template — "what happens in different circumstances"
+
+For richer logic across many situations, create an editable rules file:
+
+```bash
+crawlr init          # writes crawlr.rules.yaml
+```
+
+```yaml
+default_action: ignore
+rules:
+  - when: price_drops_below
+    amount: 25
+    action: alert
+  - when: back_in_stock
+    action: alert
+  - when: price_increases
+    action: ignore
+```
+
+When `crawlr.rules.yaml` exists it takes precedence over per‑watch triggers, giving you a single
+place to describe exactly what should happen in each circumstance.
+
 ## Architecture
 
 ```

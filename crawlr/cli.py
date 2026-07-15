@@ -21,9 +21,9 @@ from rich.console import Console
 from rich.table import Table
 
 from . import schemas as schema_registry
-from . import storage, usage
+from . import storage, triggers, usage
 from .config import LLM
-from .models import MonitoredSite
+from .models import MonitoredSite, TriggerType
 from .monitor import run_once
 
 app = typer.Typer(help="Crawlr: AI-powered, self-healing web scraper for price intelligence.")
@@ -95,6 +95,82 @@ def add(
         MonitoredSite(url=url, schema_name=schema, interval_minutes=interval)
     )
     console.print(f"[green]Added site #{site_id}[/green] {url} (schema={schema}, every {interval}m)")
+
+
+@app.command()
+def watch(
+    url: str = typer.Argument(..., help="Product URL to watch"),
+    target: float = typer.Option(None, help="Alert when price drops to/below this"),
+    restock: bool = typer.Option(False, help="Alert when the item is back in stock"),
+    trigger: str = typer.Option(
+        None, help="Explicit trigger: any_change|price_drop|price_below|price_above|back_in_stock|out_of_stock"
+    ),
+    interval: int = typer.Option(60, help="Check interval in minutes"),
+    schema: str = typer.Option("product", help="Schema (defaults to product: price + stock)"),
+) -> None:
+    """Watch a product's price and stock (the easy way)."""
+    storage.init_db()
+    _schema(schema)
+
+    # Resolve the trigger from the friendly flags.
+    if trigger:
+        chosen = TriggerType(trigger)
+    elif restock:
+        chosen = TriggerType.BACK_IN_STOCK
+    elif target is not None:
+        chosen = TriggerType.PRICE_BELOW
+    else:
+        chosen = TriggerType.ANY_CHANGE
+
+    site_id = storage.add_site(
+        MonitoredSite(
+            url=url,
+            schema_name=schema,
+            interval_minutes=interval,
+            trigger=chosen,
+            target_price=target,
+        )
+    )
+    extra = f", target ${target}" if target is not None else ""
+    console.print(
+        f"[green]Watching site #{site_id}[/green] {url} "
+        f"(trigger={chosen.value}{extra}, every {interval}m)"
+    )
+    console.print("[dim]Run `crawlr monitor` (or `--daemon`) to start checking.[/dim]")
+
+
+@app.command()
+def watchlist() -> None:
+    """Show the price/stock watchlist."""
+    storage.init_db()
+    rows = storage.watchlist()
+    if not rows:
+        console.print("[dim]Nothing watched yet. Add one with: crawlr watch <url>[/dim]")
+        return
+    table = Table("ID", "Product", "Current", "Was", "Change", "Stock", "Target", "Status")
+    for r in rows:
+        table.add_row(
+            str(r["id"]),
+            _fmt(r["title"]),
+            _price(r["price"]),
+            _price(r["prev_price"]),
+            _change(r["change_pct"]),
+            _stock(r["in_stock"]),
+            _price(r["target_price"]),
+            r["status"],
+        )
+    console.print(table)
+
+
+@app.command()
+def init(force: bool = typer.Option(False, help="Overwrite an existing rules file")) -> None:
+    """Create a starter rules template (crawlr.rules.yaml)."""
+    written, message = triggers.write_template(overwrite=force)
+    if written:
+        console.print(f"[green]Created rules template:[/green] {message}")
+        console.print("[dim]Edit it to control what happens in different circumstances.[/dim]")
+    else:
+        console.print(f"[yellow]{message}[/yellow]")
 
 
 @app.command()
@@ -261,6 +337,32 @@ def _fmt(value) -> str:
         return "[dim]-[/dim]"
     text = str(value)
     return text if len(text) <= 60 else text[:57] + "..."
+
+
+def _price(value) -> str:
+    if value is None:
+        return "[dim]-[/dim]"
+    if isinstance(value, (int, float)):
+        return f"{value:g}"
+    return str(value)
+
+
+def _change(pct) -> str:
+    if pct is None:
+        return "[dim]-[/dim]"
+    if pct < 0:
+        return f"[green]v {abs(pct)}%[/green]"
+    if pct > 0:
+        return f"[red]^ {pct}%[/red]"
+    return "0%"
+
+
+def _stock(in_stock) -> str:
+    if in_stock is True:
+        return "[green]yes[/green]"
+    if in_stock is False:
+        return "[red]no[/red]"
+    return "[dim]?[/dim]"
 
 
 if __name__ == "__main__":

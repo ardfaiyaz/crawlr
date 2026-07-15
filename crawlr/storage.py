@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Iterator
 
-from . import db
+from . import db, triggers
 from .models import MonitoredSite, PriceChange
 
 
@@ -38,18 +38,23 @@ def init_db() -> None:
 
 
 def add_site(site: MonitoredSite) -> int:
+    trigger_value = getattr(site.trigger, "value", site.trigger)
     with db.connect() as conn:
         site_id = db.insert_returning_id(
             conn,
-            """INSERT INTO sites (url, schema_name, interval_minutes, active, created_at)
-               VALUES (?, ?, ?, ?, ?)
+            """INSERT INTO sites
+               (url, schema_name, interval_minutes, active, alert_trigger, target_price, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(url, schema_name) DO UPDATE SET
-                 interval_minutes=excluded.interval_minutes, active=excluded.active""",
+                 interval_minutes=excluded.interval_minutes, active=excluded.active,
+                 alert_trigger=excluded.alert_trigger, target_price=excluded.target_price""",
             (
                 str(site.url),
                 site.schema_name,
                 site.interval_minutes,
                 int(site.active),
+                trigger_value,
+                site.target_price,
                 _now_iso(),
             ),
         )
@@ -212,3 +217,52 @@ def price_history(site_id: int, item_key: str, field: str = "price") -> list[dic
         if field in data:
             series.append({"at": r["fetched_at"], "value": data[field]})
     return series
+
+
+# ---------------------------------------------------------------------------
+# Watchlist (the simple, price/stock-focused view)
+# ---------------------------------------------------------------------------
+
+
+def watchlist() -> list[dict]:
+    """Assemble one enriched row per site: current price, movement, stock, status."""
+    rows: list[dict] = []
+    for site in list_sites():
+        sid = site["id"]
+        latest = latest_records(sid)
+        previous = previous_records(sid)
+        run = latest_run(sid)
+        current = latest[0] if latest else {}
+        prev_rec = previous[0] if previous else {}
+
+        price = current.get("price")
+        prev_price = prev_rec.get("price")
+        in_stock = triggers.is_in_stock(current.get("availability"))
+        trigger = site.get("alert_trigger", "any_change")
+        target = site.get("target_price")
+
+        change_pct = None
+        if isinstance(price, (int, float)) and isinstance(prev_price, (int, float)) and prev_price:
+            change_pct = round((price - prev_price) / prev_price * 100, 1)
+
+        rows.append(
+            {
+                "id": sid,
+                "url": site["url"],
+                "schema_name": site["schema_name"],
+                "interval_minutes": site["interval_minutes"],
+                "active": site["active"],
+                "alert_trigger": trigger,
+                "target_price": target,
+                "title": current.get("title") or current.get("item_key"),
+                "price": price,
+                "prev_price": prev_price,
+                "change_pct": change_pct,
+                "availability": current.get("availability"),
+                "in_stock": in_stock,
+                "confidence": run["confidence"] if run else None,
+                "last_checked": run["fetched_at"] if run else None,
+                "status": triggers.watch_status(price, in_stock, prev_price, trigger, target),
+            }
+        )
+    return rows
