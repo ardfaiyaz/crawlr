@@ -1,6 +1,13 @@
-# Crawlr
+<p align="center">
+  <img src="crawlr-icon-logo.png" alt="crawlr" width="120" />
+</p>
 
-**Crawlr** is an AI-powered, **self-healing** web scraper with an e-commerce / price-intelligence vertical.
+<h1 align="center">crawlr</h1>
+
+<p align="center">
+  <strong>Crawlr</strong> is an AI-powered, <strong>self-healing</strong> web scraper with an
+  e-commerce / price-intelligence vertical.
+</p>
 
 ## Why Crawlr is different
 
