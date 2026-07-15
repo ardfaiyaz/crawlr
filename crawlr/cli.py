@@ -220,6 +220,7 @@ def monitor(
     daemon: bool = typer.Option(False, help="Run continuously as a scheduler daemon"),
     poll: int = typer.Option(60, help="Daemon poll interval in seconds"),
     concurrency: int = typer.Option(5, help="Max sites scraped in parallel"),
+    digest: float = typer.Option(0, help="Daemon: send a change digest every N hours (0=off)"),
 ) -> None:
     """Run all due sites once, or continuously with --daemon."""
     import asyncio
@@ -231,12 +232,15 @@ def monitor(
     _mode_banner()
 
     if daemon:
+        digest_note = f", digest every {digest}h" if digest else ""
         console.print(
-            f"[green]Starting scheduler daemon[/green] (poll={poll}s, concurrency={concurrency}). "
-            "Press Ctrl+C to stop."
+            f"[green]Starting scheduler daemon[/green] (poll={poll}s, "
+            f"concurrency={concurrency}{digest_note}). Press Ctrl+C to stop."
         )
         try:
-            start_daemon(poll_seconds=poll, concurrency=concurrency, force_js=js)
+            start_daemon(
+                poll_seconds=poll, concurrency=concurrency, force_js=js, digest_every_hours=digest
+            )
         except KeyboardInterrupt:
             console.print("\n[dim]Daemon stopped.[/dim]")
         return
@@ -396,6 +400,34 @@ def eval_cmd(min: float = typer.Option(0.9, help="Minimum accuracy to pass")) ->
         )
     if r["accuracy"] < min:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def doctor() -> None:
+    """Run environment health checks (config, DB, schemas, LLM, alerts)."""
+    from . import doctor as doctor_mod
+
+    checks = doctor_mod.run_checks()
+    icons = {"ok": "[green]OK[/green]", "warn": "[yellow]WARN[/yellow]", "fail": "[red]FAIL[/red]"}
+    table = Table("Status", "Check", "Detail")
+    for c in checks:
+        table.add_row(icons.get(c.status, c.status), c.name, c.detail)
+    console.print(table)
+    if doctor_mod.has_failures(checks):
+        console.print("[red]Some checks failed.[/red]")
+        raise typer.Exit(code=1)
+    console.print("[green]All good.[/green]")
+
+
+@app.command(name="test-alert")
+def test_alert() -> None:
+    """Send a test alert to all configured sinks (verify your setup)."""
+    from . import alerts
+
+    sinks = alerts.configured_sinks()
+    console.print("Configured sinks: " + (", ".join(sinks) if sinks else "[yellow]none[/yellow]"))
+    alerts.send_message("Crawlr test alert", ["If you can read this, your alert sinks work."])
+    console.print("[green]Test alert dispatched.[/green]")
 
 
 @app.command()
