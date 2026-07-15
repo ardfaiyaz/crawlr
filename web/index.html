@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crawlr — AI-powered, self-healing web scraper</title>
+  <meta name="description" content="Crawlr is a command-line, AI-powered self-healing web scraper for e-commerce price and stock monitoring. It repairs its own selectors when sites change.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <a class="brand" href="/"><span class="glyph">&gt;_</span> Crawlr</a>
+      <a class="btn btn-ghost btn-sm" href="https://github.com/ardfaiyaz/crawlr">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- 1. Hero -->
+  <header class="hero">
+    <div class="wrap">
+      <span class="eyebrow">Command-line · Self-healing · Zero-config</span>
+      <h1>Track competitor prices<br>without your scraper breaking.</h1>
+      <p class="lead">
+        Crawlr is an AI-powered, self-healing web scraper for e-commerce price &amp;
+        stock monitoring. When a site changes its layout, Crawlr repairs its own
+        selectors — so your monitoring never silently dies.
+      </p>
+      <div class="cta">
+        <a class="btn btn-solid" href="#how">How to use it</a>
+        <a class="btn btn-ghost" href="https://github.com/ardfaiyaz/crawlr">View on GitHub</a>
+      </div>
+      <pre class="hero-demo"><span class="p">$ crawlr watch "https://store.example/product/123" --target 25</span>
+Watching site #1 (trigger=price_below, target $25, every 60m)
+
+<span class="p">$ crawlr watchlist</span>
+ ID  Product              Current  Was    Change   Stock  Status
+ 1   Wireless Headphones  <b>$219</b>     $249   <b>▼ 12%</b>   yes    price dropped</pre>
+    </div>
+  </header>
+
+  <!-- 2. Features -->
+  <section id="features">
+    <div class="wrap">
+      <h2>Everything you need to monitor a market</h2>
+      <p class="section-sub">Built for continuous, hands-off competitor monitoring.</p>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">↻</div>
+          <h3>Self-healing selectors</h3>
+          <p>Detects breakage after a redesign and regenerates selectors automatically — no maintenance.</p>
+        </div>
+        <div class="card">
+          <div class="ico">$</div>
+          <h3>Price &amp; stock tracking</h3>
+          <p>Watch any product's price and availability, with full history and change detection.</p>
+        </div>
+        <div class="card">
+          <div class="ico">!</div>
+          <h3>Flexible alert triggers</h3>
+          <p>Alert on any change, price drops, a target price, or back-in-stock — your choice, per watch.</p>
+        </div>
+        <div class="card">
+          <div class="ico">⌘</div>
+          <h3>Rules template</h3>
+          <p>Describe what happens in different circumstances in one editable <code>crawlr.rules.yaml</code>.</p>
+        </div>
+        <div class="card">
+          <div class="ico">◇</div>
+          <h3>Any site, no code</h3>
+          <p>Ships with e-commerce schemas; add new verticals (jobs, real estate) as simple YAML.</p>
+        </div>
+        <div class="card">
+          <div class="ico">⚑</div>
+          <h3>Alerts anywhere</h3>
+          <p>Webhook, Slack, and email notifications when something you care about changes.</p>
+        </div>
+        <div class="card">
+          <div class="ico">∅</div>
+          <h3>Runs free &amp; offline</h3>
+          <p>Works with zero API keys via the heuristic engine. Add an OpenAI key only if you want.</p>
+        </div>
+        <div class="card">
+          <div class="ico">⧉</div>
+          <h3>Anti-bot resilience</h3>
+          <p>Proxy rotation, robots.txt compliance, request jitter, and JS rendering when needed.</p>
+        </div>
+        <div class="card">
+          <div class="ico">⇅</div>
+          <h3>Scales quietly</h3>
+          <p>Concurrent monitoring, a built-in scheduler daemon, and SQLite or Postgres storage.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. How to use it -->
+  <section id="how">
+    <div class="wrap">
+      <h2>How to use it</h2>
+      <p class="section-sub">Up and running in under a minute — no API key required.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="n">1</div>
+          <h3>Install</h3>
+          <p>Clone the repo and install the CLI into a virtual environment.</p>
+        </div>
+        <div class="step">
+          <div class="n">2</div>
+          <h3>Watch a product</h3>
+          <p>Point Crawlr at a product URL and set an optional target price.</p>
+        </div>
+        <div class="step">
+          <div class="n">3</div>
+          <h3>Let it monitor</h3>
+          <p>Run the scheduler and get alerted when the price or stock changes.</p>
+        </div>
+      </div>
+      <pre><span class="c"># 1 — install</span>
+<span class="p">git clone https://github.com/ardfaiyaz/crawlr.git</span>
+<span class="p">cd crawlr && pip install -e ".[dev]"</span>
+
+<span class="c"># 2 — watch a product's price and stock</span>
+<span class="p">crawlr watch "https://store.example/product/123" --target 25</span>
+
+<span class="c"># 3 — see your watchlist and keep monitoring</span>
+<span class="p">crawlr watchlist</span>
+<span class="p">crawlr monitor --daemon</span></pre>
+    </div>
+  </section>
+
+  <!-- 4. FAQ -->
+  <section id="faq">
+    <div class="wrap">
+      <h2>FAQ</h2>
+      <p class="section-sub">The quick answers.</p>
+      <div class="faq">
+        <details>
+          <summary>Do I need an API key?</summary>
+          <p>No. Crawlr runs fully offline using a free heuristic selector engine. An OpenAI or
+            Anthropic key is optional and only improves accuracy on unusual site layouts — and even
+            then the model runs once per site, so cost is tiny.</p>
+        </details>
+        <details>
+          <summary>What happens when a site changes its layout?</summary>
+          <p>That's the whole point. Crawlr detects when its cached selectors stop matching and
+            automatically regenerates them — so your monitoring keeps working instead of silently
+            breaking.</p>
+        </details>
+        <details>
+          <summary>How do I get alerted?</summary>
+          <p>Choose a trigger per watch — any change, price drop, a target price, or back-in-stock —
+            and connect a webhook, Slack, or email. For richer logic, edit a single
+            <code>crawlr.rules.yaml</code> to describe what happens in each circumstance.</p>
+        </details>
+        <details>
+          <summary>Can it scrape sites other than shops?</summary>
+          <p>Yes. The engine is general-purpose; e-commerce ships out of the box, and you can add
+            new verticals (jobs, real estate, leads) as plain YAML schemas — no code.</p>
+        </details>
+        <details>
+          <summary>Where does it run?</summary>
+          <p>Anywhere Python runs. Use cron or the built-in <code>--daemon</code> on any always-on
+            machine, or <code>docker compose up</code> to run the scheduler with Postgres.</p>
+        </details>
+        <details>
+          <summary>Is it legal to use?</summary>
+          <p>Crawlr honors robots.txt by default. You're responsible for respecting each site's
+            terms of service — point it at sites you're allowed to monitor.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Footer -->
+  <footer>
+    <div class="wrap">
+      <span>Crawlr — AI-powered, self-healing web scraper.</span>
+      <a href="https://github.com/ardfaiyaz/crawlr">github.com/ardfaiyaz/crawlr</a>
+    </div>
+  </footer>
+</body>
+</html>
