@@ -18,6 +18,10 @@ def _key(url: str, schema_name: str) -> str:
     return f"{urlparse(url).netloc}::{schema_name}"
 
 
+def _outline_key(outline_hash: str, schema_name: str) -> str:
+    return f"outline::{outline_hash}::{schema_name}"
+
+
 def _load() -> dict:
     if SELECTOR_CACHE_PATH.exists():
         try:
@@ -48,4 +52,23 @@ def put(url: str, schema: ExtractionSchema) -> None:
 def invalidate(url: str, schema_name: str) -> None:
     data = _load()
     data.pop(_key(url, schema_name), None)
+    _save(data)
+
+
+def get_by_outline(outline_hash: str, schema_name: str) -> ExtractionSchema | None:
+    """Second-layer cache keyed by the *content* of the simplified page.
+
+    If two pages (even on different hosts) share the same structure, we can
+    reuse selectors without paying for another LLM call.
+    """
+    data = _load()
+    raw = data.get(_outline_key(outline_hash, schema_name))
+    if raw is None:
+        return None
+    return ExtractionSchema.model_validate(raw)
+
+
+def put_by_outline(outline_hash: str, schema: ExtractionSchema) -> None:
+    data = _load()
+    data[_outline_key(outline_hash, schema.name)] = schema.model_dump(mode="json")
     _save(data)

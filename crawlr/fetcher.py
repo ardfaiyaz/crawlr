@@ -1,22 +1,28 @@
-"""Fetch layer: static HTTP by default, optional JS rendering via Playwright.
+"""Fetch layer with anti-bot resilience (roadmap item 4).
 
-The engine auto-detects whether a page needs a real browser: if the static
-HTML looks like an empty JS shell (little text, heavy script), it escalates to
-Playwright when available. This keeps the common case (static HTML) fast and
-cheap while still handling JS-heavy sites.
+Defaults to static HTTP and auto-escalates to Playwright for JS-heavy pages.
+Resilience features:
+
+  * proxy rotation across a configured pool,
+  * robots.txt compliance (opt-out via config),
+  * randomized delay jitter on top of per-host rate limiting, and
+  * optional rotation of realistic User-Agent strings.
 """
 
 from __future__ import annotations
 
+import itertools
+import random
 import time
 from dataclasses import dataclass
 from urllib.parse import urlparse
+from urllib.robotparser import RobotFileParser
 
 import httpx
 from selectolax.parser import HTMLParser
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from .config import FETCH
+from .config import ANTIBOT, FETCH
 
 
 @dataclass
@@ -25,10 +31,35 @@ class FetchResult:
     html: str
     status_code: int
     rendered_with_js: bool = False
+    blocked: bool = False  # True when robots.txt disallowed the fetch
 
+
+# A small pool of realistic desktop User-Agents for optional rotation.
+_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/123.0 Safari/537.36",
+]
 
 # Track last-request time per host for polite rate limiting.
 _last_request: dict[str, float] = {}
+# Cache of parsed robots.txt per host.
+_robots: dict[str, RobotFileParser | None] = {}
+# Round-robin iterator over configured proxies (or None when none configured).
+_proxy_cycle = itertools.cycle(ANTIBOT.proxies) if ANTIBOT.proxies else None
+
+
+def _next_proxy() -> str | None:
+    return next(_proxy_cycle) if _proxy_cycle is not None else None
+
+
+def _pick_user_agent() -> str:
+    if ANTIBOT.rotate_user_agents:
+        return random.choice(_USER_AGENTS)
+    return FETCH.user_agent
 
 
 def _respect_rate_limit(url: str) -> None:
@@ -39,7 +70,35 @@ def _respect_rate_limit(url: str) -> None:
         wait = FETCH.min_delay_seconds - elapsed
         if wait > 0:
             time.sleep(wait)
+    # Add randomized jitter to look less robotic.
+    if ANTIBOT.jitter_seconds > 0:
+        time.sleep(random.uniform(0, ANTIBOT.jitter_seconds))
     _last_request[host] = time.monotonic()
+
+
+def _robots_allows(url: str) -> bool:
+    """Return True if robots.txt permits fetching `url` (fails open on error)."""
+    if not ANTIBOT.respect_robots:
+        return True
+    parsed = urlparse(url)
+    host = f"{parsed.scheme}://{parsed.netloc}"
+    if host not in _robots:
+        rp = RobotFileParser()
+        rp.set_url(f"{host}/robots.txt")
+        try:
+            with httpx.Client(timeout=10, follow_redirects=True) as client:
+                resp = client.get(f"{host}/robots.txt")
+            if resp.status_code >= 400:
+                _robots[host] = None  # no usable robots.txt -> allow
+            else:
+                rp.parse(resp.text.splitlines())
+                _robots[host] = rp
+        except Exception:
+            _robots[host] = None
+    rp = _robots[host]
+    if rp is None:
+        return True
+    return rp.can_fetch(FETCH.user_agent, url)
 
 
 def _looks_like_js_shell(html: str) -> bool:
@@ -60,9 +119,10 @@ def _looks_like_js_shell(html: str) -> bool:
     reraise=True,
 )
 def _fetch_static(url: str) -> FetchResult:
-    headers = {"User-Agent": FETCH.user_agent, "Accept": "text/html,application/xhtml+xml"}
+    headers = {"User-Agent": _pick_user_agent(), "Accept": "text/html,application/xhtml+xml"}
+    proxy = _next_proxy()
     with httpx.Client(
-        headers=headers, timeout=FETCH.timeout_seconds, follow_redirects=True
+        headers=headers, timeout=FETCH.timeout_seconds, follow_redirects=True, proxy=proxy
     ) as client:
         resp = client.get(url)
         resp.raise_for_status()
@@ -79,10 +139,15 @@ def _fetch_js(url: str) -> FetchResult:
             "Install with: pip install 'crawlr[js]' && playwright install chromium"
         ) from exc
 
+    proxy = _next_proxy()
+    launch_kwargs: dict = {"headless": True}
+    if proxy:
+        launch_kwargs["proxy"] = {"server": proxy}
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(**launch_kwargs)
         try:
-            page = browser.new_page(user_agent=FETCH.user_agent)
+            page = browser.new_page(user_agent=_pick_user_agent())
             page.goto(url, timeout=int(FETCH.timeout_seconds * 1000), wait_until="networkidle")
             html = page.content()
             return FetchResult(url=page.url, html=html, status_code=200, rendered_with_js=True)
@@ -91,7 +156,10 @@ def _fetch_js(url: str) -> FetchResult:
 
 
 def fetch(url: str, force_js: bool = False) -> FetchResult:
-    """Fetch a URL, escalating to JS rendering only when needed."""
+    """Fetch a URL, honoring robots.txt and escalating to JS only when needed."""
+    if not _robots_allows(url):
+        return FetchResult(url=url, html="", status_code=0, blocked=True)
+
     _respect_rate_limit(url)
 
     if force_js:

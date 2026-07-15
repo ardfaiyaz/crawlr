@@ -12,14 +12,16 @@ for a schema, not to extract every page. Two provider paths:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 
 import httpx
 
+from . import selector_cache, usage
 from .config import LLM
 from .models import ExtractionSchema, FieldSpec, FieldType
-from .simplifier import strip_noise
+from .simplifier import strip_noise, to_outline
 
 _SYSTEM_PROMPT = (
     "You are an expert web-scraping engineer. Given a simplified HTML outline "
@@ -33,14 +35,25 @@ _SYSTEM_PROMPT = (
 def generate_selectors(schema: ExtractionSchema, html: str) -> tuple[ExtractionSchema, bool]:
     """Fill in `selector`/`attribute` on the schema's fields.
 
-    Returns (updated_schema, used_llm).
+    Returns (updated_schema, used_llm). Cost guardrails: results of prior LLM
+    calls are cached by page-content hash (so identical structures never pay
+    twice), and a per-run call budget prevents runaway spend. Any failure falls
+    back to the free offline heuristic.
     """
     if LLM.enabled:
-        try:
-            return _generate_with_llm(schema, html), True
-        except Exception:
-            # Never let an LLM failure break scraping; fall back to heuristics.
-            pass
+        outline = to_outline(html)
+        outline_hash = hashlib.sha256(outline.encode("utf-8")).hexdigest()
+        cached = selector_cache.get_by_outline(outline_hash, schema.name)
+        if cached is not None:
+            return cached, False  # reused a prior LLM result: zero new cost
+        if usage.can_call():
+            try:
+                updated = _generate_with_llm(schema, html, outline)
+                selector_cache.put_by_outline(outline_hash, updated)
+                return updated, True
+            except Exception:
+                # Never let an LLM failure break scraping; fall back to heuristics.
+                pass
     return _generate_heuristic(schema, html), False
 
 
@@ -49,10 +62,11 @@ def generate_selectors(schema: ExtractionSchema, html: str) -> tuple[ExtractionS
 # ---------------------------------------------------------------------------
 
 
-def _generate_with_llm(schema: ExtractionSchema, html: str) -> ExtractionSchema:
-    from .simplifier import to_outline
-
-    outline = to_outline(html)
+def _generate_with_llm(
+    schema: ExtractionSchema, html: str, outline: str | None = None
+) -> ExtractionSchema:
+    if outline is None:
+        outline = to_outline(html)
     field_desc = "\n".join(
         f"- {f.name} ({f.type.value}): {f.description}" for f in schema.fields
     )
@@ -82,7 +96,10 @@ def _chat(user_prompt: str) -> str:
         with httpx.Client(timeout=LLM.timeout_seconds) as client:
             resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
+            body = resp.json()
+            u = body.get("usage", {})
+            usage.record_call(u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+            return body["choices"][0]["message"]["content"]
 
     if LLM.provider == "anthropic":
         url = (LLM.base_url or "https://api.anthropic.com/v1") + "/messages"
@@ -99,7 +116,10 @@ def _chat(user_prompt: str) -> str:
         with httpx.Client(timeout=LLM.timeout_seconds) as client:
             resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
-            return resp.json()["content"][0]["text"]
+            body = resp.json()
+            u = body.get("usage", {})
+            usage.record_call(u.get("input_tokens", 0), u.get("output_tokens", 0))
+            return body["content"][0]["text"]
 
     raise RuntimeError(f"Unsupported LLM provider: {LLM.provider}")
 

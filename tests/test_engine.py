@@ -6,29 +6,11 @@ local fixtures, and selector generation uses the heuristic path.
 
 from __future__ import annotations
 
-import importlib
-
-import pytest
-
-from crawlr import extractor, monitor, selector_cache, storage
+from crawlr import extractor, monitor, storage
 from crawlr.fetcher import FetchResult
 from crawlr.models import ExtractionSchema, FieldSpec, FieldType
 from crawlr.verticals import ecommerce
 from tests import fixtures
-
-
-@pytest.fixture(autouse=True)
-def isolated_env(tmp_path, monkeypatch):
-    """Point data dir at a temp path and reset cached module-level config."""
-    monkeypatch.setenv("CRAWLR_DATA_DIR", str(tmp_path))
-    # Reload config-dependent modules so they pick up the temp data dir.
-    import crawlr.config as config
-
-    importlib.reload(config)
-    importlib.reload(selector_cache)
-    importlib.reload(storage)
-    storage.init_db()
-    yield
 
 
 def _patch_fetch(monkeypatch, html: str, url: str = "https://shop.test/search"):
