@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crawlr — Documentation</title>
+  <meta name="description" content="Documentation for Crawlr: install, commands, triggers, rules templates, custom schemas, alerts, and configuration.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <a class="brand" href="index.html"><span class="glyph">&gt;_</span> Crawlr</a>
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="index.html#features" class="hide-sm">Features</a>
+        <a href="docs.html">Docs</a>
+        <a href="https://github.com/ardfaiyaz/crawlr">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <div class="docs">
+      <aside class="toc">
+        <h4>Documentation</h4>
+        <a href="#install">Install</a>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#commands">Commands</a>
+        <a href="#watch">Watch &amp; watchlist</a>
+        <a href="#triggers">Alert triggers</a>
+        <a href="#rules">Rules template</a>
+        <a href="#schemas">Custom schemas</a>
+        <a href="#alerts">Alerts</a>
+        <a href="#llm">AI mode</a>
+        <a href="#config">Configuration</a>
+        <a href="#deploy">Deploy</a>
+      </aside>
+
+      <main class="doc-body">
+        <h2 id="install">Install</h2>
+        <p>Crawlr is a Python command-line tool (Python 3.10+).</p>
+        <pre><span class="p">git clone https://github.com/ardfaiyaz/crawlr.git</span>
+<span class="p">cd crawlr</span>
+<span class="p">python -m venv .venv</span>
+<span class="c"># macOS / Linux</span>
+<span class="p">source .venv/bin/activate</span>
+<span class="c"># Windows PowerShell</span>
+<span class="p">.venv\Scripts\Activate.ps1</span>
+
+<span class="p">pip install -e ".[dev]"</span></pre>
+        <p>Optional extras:</p>
+        <pre><span class="p">pip install -e ".[js]" && playwright install chromium</span>   <span class="c"># JS-heavy sites</span>
+<span class="p">pip install -e ".[postgres]"</span>                            <span class="c"># Postgres backend</span></pre>
+        <div class="note">Crawlr runs fully offline with <strong>zero API keys</strong> using its
+          heuristic selector engine. An LLM key is optional and only improves accuracy on unusual layouts.</div>
+
+        <h2 id="quickstart">Quickstart</h2>
+        <pre><span class="p">crawlr watch "https://store.example/product/123" --target 25</span>
+<span class="p">crawlr watchlist</span>
+<span class="p">crawlr monitor --daemon</span></pre>
+
+        <h2 id="commands">Commands</h2>
+        <table>
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>crawlr watch &lt;url&gt;</code></td><td>Track a product's price &amp; stock (the easy way).</td></tr>
+            <tr><td><code>crawlr watchlist</code></td><td>Show the price/stock watchlist.</td></tr>
+            <tr><td><code>crawlr scrape &lt;url&gt;</code></td><td>One-off scrape of a URL against a schema.</td></tr>
+            <tr><td><code>crawlr monitor</code></td><td>Run all due sites once, or continuously with <code>--daemon</code>.</td></tr>
+            <tr><td><code>crawlr sites</code></td><td>List monitored sites.</td></tr>
+            <tr><td><code>crawlr run &lt;id&gt;</code></td><td>Run one monitored site now and show changes.</td></tr>
+            <tr><td><code>crawlr changes</code></td><td>Show recently detected changes.</td></tr>
+            <tr><td><code>crawlr schemas</code></td><td>List built-in + user-defined schemas.</td></tr>
+            <tr><td><code>crawlr validate-schema &lt;file&gt;</code></td><td>Validate a YAML/JSON schema file.</td></tr>
+            <tr><td><code>crawlr init</code></td><td>Create the starter rules template.</td></tr>
+            <tr><td><code>crawlr serve</code></td><td>Launch the optional local dashboard.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="watch">Watch &amp; watchlist</h2>
+        <p>The simplest way to monitor a competitor product:</p>
+        <pre><span class="p">crawlr watch "https://store.example/p/1"</span>              <span class="c"># track price + stock</span>
+<span class="p">crawlr watch "https://store.example/p/1" --target 25</span>  <span class="c"># alert at/below $25</span>
+<span class="p">crawlr watch "https://store.example/p/1" --restock</span>    <span class="c"># alert when back in stock</span>
+<span class="p">crawlr watch "https://store.example/p/1" --interval 30</span> <span class="c"># check every 30 min</span></pre>
+        <p><code>crawlr watchlist</code> shows current price, previous price, % change, stock, target, and status.</p>
+
+        <h2 id="triggers">Alert triggers</h2>
+        <p>Pick when a watch should alert (CLI <code>--trigger</code> or the dashboard dropdown):</p>
+        <table>
+          <thead><tr><th>Trigger</th><th>Alerts when</th></tr></thead>
+          <tbody>
+            <tr><td><code>any_change</code></td><td>any watched field changes</td></tr>
+            <tr><td><code>price_drop</code></td><td>the price goes down</td></tr>
+            <tr><td><code>price_below</code></td><td>price is at/below your target</td></tr>
+            <tr><td><code>price_above</code></td><td>price is at/above your target</td></tr>
+            <tr><td><code>back_in_stock</code></td><td>the item becomes available</td></tr>
+            <tr><td><code>out_of_stock</code></td><td>the item sells out</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="rules">Rules template</h2>
+        <p>For richer logic across many situations, generate an editable rules file:</p>
+        <pre><span class="p">crawlr init</span>   <span class="c"># writes crawlr.rules.yaml</span></pre>
+        <pre>default_action: ignore
+rules:
+  - when: price_drops_below
+    amount: 25
+    action: alert
+  - when: back_in_stock
+    action: alert
+  - when: price_increases
+    action: ignore</pre>
+        <p>When <code>crawlr.rules.yaml</code> exists it takes precedence over per-watch triggers — one place
+          to describe exactly what should happen in each circumstance.</p>
+
+        <h2 id="schemas">Custom schemas (no code)</h2>
+        <p>Add new verticals by dropping a YAML file into your schema directory:</p>
+        <pre>name: jobs
+item_selector: ".job-card"
+fields:
+  - name: title
+    description: the job title
+    type: text
+    required: true
+  - name: salary
+    description: annual salary
+    type: number</pre>
+        <pre><span class="p">crawlr validate-schema ./jobs.yaml</span>
+<span class="p">crawlr scrape "https://jobs.example" --schema jobs</span></pre>
+
+        <h2 id="alerts">Alerts</h2>
+        <p>Configure any combination of sinks via environment variables:</p>
+        <pre><span class="p">export CRAWLR_ALERT_WEBHOOK="https://webhook.site/your-id"</span>
+<span class="p">export CRAWLR_ALERT_SLACK="https://hooks.slack.com/services/..."</span>
+<span class="p">export CRAWLR_ALERT_EMAIL_TO="you@example.com"</span>
+<span class="p">export CRAWLR_SMTP_HOST="smtp.example.com"</span></pre>
+
+        <h2 id="llm">AI mode (optional)</h2>
+        <p>Enable LLM selector generation for tricky sites. Usage is tiny — the model runs
+          once per site, then selectors are cached.</p>
+        <pre><span class="p">export CRAWLR_LLM_PROVIDER="openai"</span>   <span class="c"># or anthropic</span>
+<span class="p">export CRAWLR_LLM_API_KEY="sk-..."</span>
+<span class="p">export CRAWLR_LLM_MODEL="gpt-4o-mini"</span></pre>
+
+        <h2 id="config">Configuration reference</h2>
+        <table>
+          <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>CRAWLR_DATA_DIR</code></td><td><code>./.crawlr</code></td><td>Database, selector cache, schemas</td></tr>
+            <tr><td><code>CRAWLR_DATABASE_URL</code></td><td>—</td><td><code>postgresql://…</code> to use Postgres instead of SQLite</td></tr>
+            <tr><td><code>CRAWLR_LLM_PROVIDER</code></td><td><code>none</code></td><td><code>openai</code>, <code>anthropic</code>, or <code>none</code></td></tr>
+            <tr><td><code>CRAWLR_LLM_API_KEY</code></td><td>—</td><td>API key for the chosen provider</td></tr>
+            <tr><td><code>CRAWLR_PROXIES</code></td><td>—</td><td>Comma-separated proxy URLs to rotate</td></tr>
+            <tr><td><code>CRAWLR_RESPECT_ROBOTS</code></td><td><code>true</code></td><td>Honor robots.txt</td></tr>
+            <tr><td><code>CRAWLR_ALERT_MIN_DROP</code></td><td><code>0.0</code></td><td>Only alert on price drops ≥ this fraction</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="deploy">Deploy</h2>
+        <p>Crawlr is a CLI, so "deploy" means running the scheduler somewhere it can check on a
+          timer. Options:</p>
+        <ul>
+          <li><strong>Cron / Task Scheduler:</strong> run <code>crawlr monitor</code> on a schedule.</li>
+          <li><strong>Daemon:</strong> run <code>crawlr monitor --daemon</code> on any always-on machine.</li>
+          <li><strong>Docker:</strong> <code>docker compose up</code> starts the scheduler with Postgres.</li>
+        </ul>
+        <div class="note">This website is a static showcase and deploys free on Vercel. The product
+          itself is the command-line tool — install it locally or on a server.</div>
+      </main>
+    </div>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <span>Crawlr — AI-powered, self-healing web scraper.</span>
+      <span>
+        <a href="index.html">Home</a> ·
+        <a href="https://github.com/ardfaiyaz/crawlr">GitHub</a>
+      </span>
+    </div>
+  </footer>
+</body>
+</html>
