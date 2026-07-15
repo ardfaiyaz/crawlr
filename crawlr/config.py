@@ -39,6 +39,10 @@ SNAPSHOT_DIR = Path(os.getenv("CRAWLR_SNAPSHOT_DIR", str(DATA_DIR / "snapshots")
 # (0.0 disables the gate). Uses per-field consensus confidence.
 MIN_FIELD_CONFIDENCE = float(os.getenv("CRAWLR_MIN_FIELD_CONFIDENCE", "0.0"))
 
+# Hosted API: when set, the JSON API requires this key (X-API-Key or Bearer).
+# Left unset, the API is open (fine for local use).
+API_KEY = os.getenv("CRAWLR_API_KEY", "") or None
+
 
 def _split_csv(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
