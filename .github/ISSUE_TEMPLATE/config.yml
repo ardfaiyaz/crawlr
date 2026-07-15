@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation & examples
+    url: https://github.com/ardfaiyaz/crawlr#readme
+    about: Check the README and the examples/ folder first.

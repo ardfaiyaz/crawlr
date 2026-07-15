@@ -1,0 +1,30 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact command(s) you ran and, if relevant, the URL/schema.
+      placeholder: |
+        crawlr scrape "https://..." --schema product
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `crawlr doctor`
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Crawlr version
+      placeholder: "0.2.0 (crawlr --version / pip show crawlr)"

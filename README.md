@@ -107,13 +107,30 @@ Set via environment variables or a `.env` file:
 | `CRAWLR_PROXIES` | — | Comma-separated proxy URLs to rotate |
 | `CRAWLR_RESPECT_ROBOTS` | `true` | Honor robots.txt |
 
+## Examples
+
+Ready-to-run recipes live in [`examples/`](./examples) — watch competitors, use a
+custom schema, and call the hosted API from Python.
+
 ## Development
 
 ```bash
 pip install -e '.[dev]'
 pytest          # offline test suite
 ruff check .    # lint
+crawlr eval     # extraction accuracy gate
 ```
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md). Great first
+contributions: new vertical presets, golden eval cases for sites that extract
+wrong, and docs/examples.
+
+## Demo
+
+A short GIF is the best intro. Generate one with [VHS](https://github.com/charmbracelet/vhs):
+`vhs docs/demo.tape` → `docs/demo.gif` (see [docs/DEMO.md](./docs/DEMO.md)).
 
 ## License
 
