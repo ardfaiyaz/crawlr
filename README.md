@@ -1,6 +1,5 @@
 <p align="center">
-  <img src="[crawlr-icon-logo.png](https://raw.githubusercontent.com/ardfaiyaz/crawlr/main/crawlr-icon-logo.png
-)" alt="crawlr" width="120" />
+  <img src="https://raw.githubusercontent.com/ardfaiyaz/crawlr/main/crawlr-icon-logo.png" alt="crawlr" width="120" />
 </p>
 
 <h1 align="center">crawlr</h1>
