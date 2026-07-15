@@ -87,6 +87,19 @@ def notify(site_url: str, changes: list[PriceChange]) -> list[PriceChange]:
     return to_send
 
 
+def send_message(subject: str, lines: list[str], payload_extra: dict | None = None) -> None:
+    """Dispatch an arbitrary message (e.g. a digest) to all configured sinks."""
+    body = subject + "\n\n" + "\n".join(f"- {line}" for line in lines)
+    if ALERTS.console:
+        logger.info(body)
+    payload = {"subject": subject, "lines": lines}
+    if payload_extra:
+        payload.update(payload_extra)
+    _safe(_send_webhook, payload)
+    _safe(_send_slack, subject, lines)
+    _safe(_send_email, subject, body)
+
+
 # ---------------------------------------------------------------------------
 # Sinks
 # ---------------------------------------------------------------------------
