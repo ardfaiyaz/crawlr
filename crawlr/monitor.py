@@ -13,7 +13,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Callable
 
-from . import alerts, db, storage
+from . import alerts, db, storage, triggers
 from .extractor import scrape
 from .models import ExtractionResult, ExtractionSchema, PriceChange
 
@@ -109,7 +109,10 @@ def run_once(
         changes = diff_records(prev_clean, result.records, key_field, watch)
         storage.record_changes(site_id, changes)
         if send_alerts and changes:
-            alerts.notify(site["url"], changes)
+            # Only alert on changes matching the site's trigger / rules template.
+            to_alert = triggers.filter_changes(site, changes)
+            if to_alert:
+                alerts.notify(site["url"], to_alert)
 
     return result, changes
 

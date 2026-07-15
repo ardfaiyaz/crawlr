@@ -15,6 +15,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CRAWLR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CRAWLR_RULES_FILE", str(tmp_path / "crawlr.rules.yaml"))
     monkeypatch.delenv("CRAWLR_DATABASE_URL", raising=False)
     monkeypatch.setenv("CRAWLR_LLM_PROVIDER", "none")
     monkeypatch.setenv("CRAWLR_RESPECT_ROBOTS", "false")

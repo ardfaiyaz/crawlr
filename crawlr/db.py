@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS sites (
     schema_name TEXT NOT NULL,
     interval_minutes INTEGER NOT NULL DEFAULT 60,
     active INTEGER NOT NULL DEFAULT 1,
+    alert_trigger TEXT NOT NULL DEFAULT 'any_change',
+    target_price REAL,
     created_at TEXT NOT NULL,
     UNIQUE(url, schema_name)
 );
@@ -107,6 +109,38 @@ def init_schema(conn) -> None:
     for statement in SCHEMA.split(";"):
         if statement.strip():
             conn.execute(statement)
+    _migrate(conn)
+
+
+# Columns added after the initial release; applied to pre-existing databases.
+_MIGRATIONS = [
+    ("sites", "alert_trigger", "TEXT NOT NULL DEFAULT 'any_change'"),
+    ("sites", "target_price", "REAL"),
+]
+
+
+def _migrate(conn) -> None:
+    """Add any missing columns to existing tables (idempotent)."""
+    for table, column, coldef in _MIGRATIONS:
+        if not _column_exists(conn, table, column):
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coldef}")
+            except Exception:
+                pass  # column already exists or backend added it another way
+
+
+def _column_exists(conn, table: str, column: str) -> bool:
+    if BACKEND == "postgres":
+        row = conn.execute(
+            q(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name=? AND column_name=?"
+            ),
+            (table, column),
+        ).fetchone()
+        return row is not None
+    cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(c["name"] == column for c in cols)
 
 
 def insert_returning_id(conn, sql: str, params: tuple) -> int | None:

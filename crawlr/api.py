@@ -1,8 +1,7 @@
-"""Crawlr FastAPI dashboard + JSON API (roadmap item 8).
+"""Crawlr dashboard + JSON API.
 
-Beyond the read-only views it now supports adding sites and triggering runs from
-the UI, shows per-site health (confidence from the latest run), and renders
-inline price-history sparklines.
+A black-and-white, iOS-styled watchlist: paste a product URL, pick when to be
+alerted (the trigger filter), and track price movement + stock at a glance.
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from . import schemas as schema_registry
 from . import storage
-from .models import MonitoredSite
+from .models import MonitoredSite, TriggerType
 from .monitor import run_once
 
 
@@ -24,7 +23,17 @@ async def _lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Crawlr dashboard", version="0.1.0", lifespan=_lifespan)
+app = FastAPI(title="Crawlr", version="0.2.0", lifespan=_lifespan)
+
+# Friendly labels for the trigger filter dropdown.
+_TRIGGER_LABELS = {
+    "any_change": "Any change",
+    "price_drop": "Price drops",
+    "price_below": "Price at/below target",
+    "price_above": "Price at/above target",
+    "back_in_stock": "Back in stock",
+    "out_of_stock": "Out of stock",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +44,11 @@ app = FastAPI(title="Crawlr dashboard", version="0.1.0", lifespan=_lifespan)
 @app.get("/api/sites")
 def api_sites() -> list[dict]:
     return storage.list_sites()
+
+
+@app.get("/api/watchlist")
+def api_watchlist() -> list[dict]:
+    return storage.watchlist()
 
 
 @app.get("/api/sites/{site_id}/records")
@@ -58,19 +72,36 @@ def api_schemas() -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Actions (add site, run now)
+# Actions
 # ---------------------------------------------------------------------------
 
 
 @app.post("/sites")
-def add_site_action(
+def add_watch_action(
     url: str = Form(...),
     schema_name: str = Form("product"),
+    alert_trigger: str = Form("any_change"),
+    target_price: str = Form(""),
     interval: int = Form(60),
 ) -> RedirectResponse:
     if schema_registry.resolve(schema_name) is not None:
+        try:
+            trigger = TriggerType(alert_trigger)
+        except ValueError:
+            trigger = TriggerType.ANY_CHANGE
+        target = None
+        try:
+            target = float(target_price) if target_price.strip() else None
+        except ValueError:
+            target = None
         storage.add_site(
-            MonitoredSite(url=url, schema_name=schema_name, interval_minutes=interval)
+            MonitoredSite(
+                url=url,
+                schema_name=schema_name,
+                interval_minutes=interval,
+                trigger=trigger,
+                target_price=target,
+            )
         )
     return RedirectResponse("/", status_code=303)
 
@@ -92,68 +123,80 @@ def run_site_action(site_id: int) -> RedirectResponse:
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard() -> str:
-    sites = storage.list_sites()
-    changes = storage.recent_changes(limit=25)
+    rows = storage.watchlist()
+    changes = storage.recent_changes(limit=20)
+
     schema_options = "".join(
         f"<option value='{s['name']}'>{s['name']}</option>" for s in schema_registry.available()
     )
-
-    site_rows = "".join(_site_row(s) for s in sites) or (
-        "<tr><td colspan='7' class='muted'>No sites yet — add one below.</td></tr>"
+    trigger_options = "".join(
+        f"<option value='{value}'>{label}</option>" for value, label in _TRIGGER_LABELS.items()
     )
 
+    watch_rows = "".join(_watch_row(r) for r in rows) or (
+        "<tr><td colspan='8' class='empty'>Nothing watched yet — add a product below.</td></tr>"
+    )
     change_rows = "".join(
-        f"<tr><td>{c['changed_at'][:19]}</td><td>{_short(c['site_url'])}</td>"
+        f"<tr><td class='mono'>{c['changed_at'][:19].replace('T', ' ')}</td>"
         f"<td>{_short(c['item_key'])}</td><td>{c['field']}</td>"
-        f"<td>{c['old_value']}</td><td class='new'>{c['new_value']}</td></tr>"
+        f"<td class='mono'>{c['old_value']}</td><td class='mono strong'>{c['new_value']}</td></tr>"
         for c in changes
-    ) or "<tr><td colspan='6' class='muted'>No changes recorded yet.</td></tr>"
+    ) or "<tr><td colspan='5' class='empty'>No changes recorded yet.</td></tr>"
 
+    watching = sum(1 for r in rows if r["active"])
     return _PAGE.format(
-        site_rows=site_rows,
+        watch_rows=watch_rows,
         change_rows=change_rows,
-        count=len(sites),
+        count=len(rows),
+        watching=watching,
         schema_options=schema_options,
+        trigger_options=trigger_options,
     )
 
 
-def _site_row(s: dict) -> str:
-    run = storage.latest_run(s["id"])
-    health = _health_badge(run)
-    spark = _sparkline_for_site(s["id"])
+def _watch_row(r: dict) -> str:
+    spark = _sparkline_for_site(r["id"])
     return (
-        f"<tr><td>{s['id']}</td>"
-        f"<td><a href='{s['url']}'>{_short(s['url'], 40)}</a></td>"
-        f"<td>{s['schema_name']}</td><td>{s['interval_minutes']}m</td>"
-        f"<td>{'active' if s['active'] else 'paused'}</td>"
-        f"<td>{health}</td>"
-        f"<td>{_latest_summary(s['id'])} {spark}</td>"
-        f"<td><form method='post' action='/sites/{s['id']}/run' style='margin:0'>"
-        f"<button class='btn'>Run now</button></form></td></tr>"
+        "<tr>"
+        f"<td class='title'>{_short(r['title'] or r['url'], 46)}"
+        f"<div class='sub'>{_short(r['url'], 52)}</div></td>"
+        f"<td class='num strong'>{_price(r['price'])}</td>"
+        f"<td class='num was'>{_price(r['prev_price'])}</td>"
+        f"<td class='num'>{_change(r['change_pct'])}</td>"
+        f"<td>{_stock(r['in_stock'])}</td>"
+        f"<td class='num'>{_price(r['target_price'])}</td>"
+        f"<td><span class='pill'>{r['status']}</span>{spark}</td>"
+        f"<td class='right'><form method='post' action='/sites/{r['id']}/run'>"
+        f"<button class='btn'>Check</button></form></td>"
+        "</tr>"
     )
 
 
-def _health_badge(run: dict | None) -> str:
-    if not run:
-        return "<span class='muted'>no runs</span>"
-    conf = float(run.get("confidence", 0))
-    color = "#7ee787" if conf >= 0.8 else "#e3b341" if conf >= 0.4 else "#f85149"
-    return f"<span class='dot' style='background:{color}'></span>{conf:.0%}"
+def _price(v) -> str:
+    if v is None:
+        return "<span class='dim'>—</span>"
+    return f"{v:g}" if isinstance(v, (int, float)) else str(v)
 
 
-def _latest_summary(site_id: int) -> str:
-    records = storage.latest_records(site_id)
-    if not records:
-        return "<span class='muted'>-</span>"
-    first = records[0]
-    price = first.get("price")
-    title = first.get("title") or first.get("item_key") or ""
-    label = _short(str(title), 26)
-    return f"{label} @ {price}" if price is not None else label
+def _change(pct) -> str:
+    if pct is None:
+        return "<span class='dim'>—</span>"
+    if pct < 0:
+        return f"<span class='down'>&#9660; {abs(pct)}%</span>"
+    if pct > 0:
+        return f"<span class='up'>&#9650; {pct}%</span>"
+    return "<span class='dim'>0%</span>"
+
+
+def _stock(in_stock) -> str:
+    if in_stock is True:
+        return "<span class='dot filled'></span>In stock"
+    if in_stock is False:
+        return "<span class='dot'></span>Out"
+    return "<span class='dim'>—</span>"
 
 
 def _sparkline_for_site(site_id: int) -> str:
-    """Inline SVG sparkline of the first item's price history, if any."""
     records = storage.latest_records(site_id)
     if not records or not records[0].get("item_key"):
         return ""
@@ -164,7 +207,7 @@ def _sparkline_for_site(site_id: int) -> str:
     return _sparkline(values)
 
 
-def _sparkline(values: list[float], width: int = 90, height: int = 22) -> str:
+def _sparkline(values: list[float], width: int = 80, height: int = 20) -> str:
     lo, hi = min(values), max(values)
     span = (hi - lo) or 1.0
     n = len(values)
@@ -172,18 +215,17 @@ def _sparkline(values: list[float], width: int = 90, height: int = 22) -> str:
         f"{(i / (n - 1)) * width:.1f},{height - ((v - lo) / span) * height:.1f}"
         for i, v in enumerate(values)
     )
-    color = "#7ee787" if values[-1] <= values[0] else "#f85149"
     return (
-        f"<svg width='{width}' height='{height}' viewBox='0 0 {width} {height}' "
-        f"style='vertical-align:middle'><polyline fill='none' stroke='{color}' "
-        f"stroke-width='1.5' points='{points}'/></svg>"
+        f"<svg class='spark' width='{width}' height='{height}' viewBox='0 0 {width} {height}'>"
+        f"<polyline fill='none' stroke='currentColor' stroke-width='1.5' points='{points}'/></svg>"
     )
 
 
-def _short(text: str | None, n: int = 45) -> str:
+def _short(text, n: int = 45) -> str:
     if not text:
         return ""
-    return text if len(text) <= n else text[: n - 3] + "..."
+    text = str(text)
+    return text if len(text) <= n else text[: n - 1] + "\u2026"
 
 
 _PAGE = """<!doctype html>
@@ -191,64 +233,98 @@ _PAGE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlr dashboard</title>
+<title>Crawlr</title>
 <style>
-  :root {{ color-scheme: light dark; }}
+  :root {{
+    --ink: #0a0a0a; --paper: #ffffff; --line: #e5e5e5; --muted: #8a8a8a;
+    --chip: #f2f2f2; --radius: 14px;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+            "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+  }}
   * {{ box-sizing: border-box; }}
-  body {{ font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 2rem;
-         background: #0f1116; color: #e6e6e6; }}
-  h1 {{ font-size: 1.4rem; margin: 0 0 .25rem; }}
-  .sub {{ color: #8a93a6; margin-bottom: 2rem; font-size: .9rem; }}
-  section {{ margin-bottom: 2.5rem; }}
-  h2 {{ font-size: 1rem; text-transform: uppercase; letter-spacing: .05em;
-        color: #8a93a6; border-bottom: 1px solid #262a33; padding-bottom: .5rem; }}
-  table {{ width: 100%; border-collapse: collapse; font-size: .9rem; }}
-  th, td {{ text-align: left; padding: .55rem .6rem; border-bottom: 1px solid #1c2029; }}
-  th {{ color: #8a93a6; font-weight: 600; }}
-  tr:hover td {{ background: #161a22; }}
-  a {{ color: #6ea8fe; text-decoration: none; }}
-  .muted {{ color: #5c6472; }}
-  .new {{ color: #7ee787; font-weight: 600; }}
-  .badge {{ display: inline-block; background: #1f6feb; color: #fff; padding: .1rem .5rem;
-           border-radius: 999px; font-size: .75rem; }}
-  .dot {{ display: inline-block; width: .6rem; height: .6rem; border-radius: 50%;
-          margin-right: .4rem; }}
-  .btn {{ background: #1f6feb; color: #fff; border: 0; border-radius: 6px;
-          padding: .35rem .7rem; font-size: .8rem; cursor: pointer; }}
-  .btn:hover {{ background: #388bfd; }}
-  form.add {{ display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-top: 1rem; }}
-  input, select {{ background: #161a22; color: #e6e6e6; border: 1px solid #262a33;
-          border-radius: 6px; padding: .4rem .6rem; font-size: .9rem; }}
-  input[type=url] {{ flex: 1; min-width: 260px; }}
+  body {{ font-family: var(--font); margin: 0; background: var(--paper); color: var(--ink);
+         -webkit-font-smoothing: antialiased; letter-spacing: -0.01em; }}
+  .wrap {{ max-width: 1000px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }}
+  header {{ display: flex; align-items: baseline; gap: .75rem; margin-bottom: .25rem; }}
+  h1 {{ font-size: 2rem; font-weight: 700; margin: 0; letter-spacing: -0.03em; }}
+  .count {{ color: var(--muted); font-size: .95rem; }}
+  .tagline {{ color: var(--muted); margin: 0 0 2.5rem; font-size: 1rem; }}
+  h2 {{ font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+        color: var(--muted); margin: 2.5rem 0 .75rem; }}
+  .card {{ border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+           background: var(--paper); }}
+  table {{ width: 100%; border-collapse: collapse; font-size: .95rem; }}
+  th {{ text-align: left; font-weight: 600; color: var(--muted); font-size: .75rem;
+        text-transform: uppercase; letter-spacing: .05em; padding: .85rem 1rem; }}
+  td {{ padding: .85rem 1rem; border-top: 1px solid var(--line); vertical-align: middle; }}
+  tbody tr:hover {{ background: #fafafa; }}
+  .title {{ font-weight: 600; max-width: 320px; }}
+  .sub {{ color: var(--muted); font-weight: 400; font-size: .78rem; margin-top: .15rem; }}
+  .num {{ font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }}
+  .right {{ text-align: right; }}
+  .strong {{ font-weight: 700; }}
+  .was {{ color: var(--muted); text-decoration: line-through; }}
+  .up {{ font-weight: 600; }} .down {{ font-weight: 600; }}
+  .dim, .empty {{ color: var(--muted); }}
+  .empty {{ text-align: center; padding: 2rem; }}
+  .mono {{ font-variant-numeric: tabular-nums; }}
+  .pill {{ display: inline-block; background: var(--chip); border-radius: 999px;
+           padding: .15rem .6rem; font-size: .78rem; font-weight: 500; }}
+  .dot {{ display: inline-block; width: .55rem; height: .55rem; border-radius: 50%;
+          border: 1.5px solid var(--ink); margin-right: .4rem; vertical-align: middle; }}
+  .dot.filled {{ background: var(--ink); }}
+  .spark {{ display: block; margin-top: .4rem; color: var(--ink); }}
+  .btn {{ font-family: var(--font); background: var(--ink); color: var(--paper); border: 0;
+          border-radius: 999px; padding: .4rem .9rem; font-size: .82rem; font-weight: 600;
+          cursor: pointer; }}
+  .btn:hover {{ opacity: .85; }}
+  form.add {{ display: flex; gap: .6rem; flex-wrap: wrap; align-items: center;
+              margin-top: 1rem; padding: 1rem; border: 1px solid var(--line);
+              border-radius: var(--radius); }}
+  input, select {{ font-family: var(--font); background: var(--paper); color: var(--ink);
+          border: 1px solid var(--line); border-radius: 10px; padding: .55rem .7rem;
+          font-size: .92rem; }}
+  input:focus, select:focus {{ outline: 2px solid var(--ink); outline-offset: -1px; }}
+  input[type=url] {{ flex: 1; min-width: 240px; }}
+  input[type=number] {{ width: 6.5rem; }}
 </style>
 </head>
 <body>
-  <h1>Crawlr <span class="badge">{count} sites</span></h1>
-  <p class="sub">Self-healing price intelligence &mdash; monitored sites &amp; detected changes</p>
+  <div class="wrap">
+    <header>
+      <h1>Crawlr</h1>
+      <span class="count">{watching} active / {count} watched</span>
+    </header>
+    <p class="tagline">Competitor price &amp; stock monitoring — self-healing.</p>
 
-  <section>
-    <h2>Monitored sites</h2>
-    <table>
-      <thead><tr><th>ID</th><th>URL</th><th>Schema</th><th>Interval</th>
-        <th>Status</th><th>Health</th><th>Latest</th><th></th></tr></thead>
-      <tbody>{site_rows}</tbody>
-    </table>
+    <h2>Watchlist</h2>
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th>Product</th><th class="num">Current</th><th class="num">Was</th>
+          <th class="num">Change</th><th>Stock</th><th class="num">Target</th>
+          <th>Status</th><th></th>
+        </tr></thead>
+        <tbody>{watch_rows}</tbody>
+      </table>
+    </div>
+
     <form class="add" method="post" action="/sites">
       <input type="url" name="url" placeholder="https://store.example/product/123" required>
-      <select name="schema_name">{schema_options}</select>
-      <input type="number" name="interval" value="60" min="1" title="Interval (minutes)"
-             style="width:6rem">
-      <button class="btn" type="submit">Add site</button>
+      <select name="schema_name" title="Schema">{schema_options}</select>
+      <select name="alert_trigger" title="Alert me when">{trigger_options}</select>
+      <input type="number" name="target_price" placeholder="Target $" step="0.01" min="0">
+      <input type="number" name="interval" value="60" min="1" title="Every N minutes">
+      <button class="btn" type="submit">Watch</button>
     </form>
-  </section>
 
-  <section>
     <h2>Recent changes</h2>
-    <table>
-      <thead><tr><th>When</th><th>Site</th><th>Item</th><th>Field</th>
-        <th>Old</th><th>New</th></tr></thead>
-      <tbody>{change_rows}</tbody>
-    </table>
-  </section>
+    <div class="card">
+      <table>
+        <thead><tr><th>When</th><th>Item</th><th>Field</th><th>Old</th><th>New</th></tr></thead>
+        <tbody>{change_rows}</tbody>
+      </table>
+    </div>
+  </div>
 </body>
 </html>"""

@@ -21,6 +21,21 @@ class FieldType(str, Enum):
     BOOL = "bool"
 
 
+class TriggerType(str, Enum):
+    """When a watched site should raise an alert.
+
+    Users pick one per watch (the simple path); the rules template can override
+    with richer circumstance -> action logic.
+    """
+
+    ANY_CHANGE = "any_change"       # any watched field changed
+    PRICE_DROP = "price_drop"       # price went down at all
+    PRICE_BELOW = "price_below"     # price at/under target_price
+    PRICE_ABOVE = "price_above"     # price at/over target_price
+    BACK_IN_STOCK = "back_in_stock"  # availability flipped to in-stock
+    OUT_OF_STOCK = "out_of_stock"   # availability flipped to out-of-stock
+
+
 class FieldSpec(BaseModel):
     """A single field the user wants to extract.
 
@@ -105,4 +120,6 @@ class MonitoredSite(BaseModel):
     schema_name: str
     interval_minutes: int = 60
     active: bool = True
+    trigger: TriggerType = TriggerType.ANY_CHANGE
+    target_price: float | None = None
     created_at: datetime = Field(default_factory=_now)
