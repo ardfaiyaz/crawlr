@@ -207,9 +207,8 @@ production.
 
 ## Website &amp; docs
 
-Crawlr is a **command-line product**. The `web/` directory is a static showcase + docs
-site (what Crawlr does, how to use it, and reference documentation) — it deploys free on
-Vercel:
+Crawlr is a **command-line product**. The `web/` directory is a single static landing page
+(hero, features, how to use it, and an FAQ) — it deploys free on Vercel:
 
 1. Import the repo at [vercel.com/new](https://vercel.com/new).
 2. Set **Root Directory** to `web`.
