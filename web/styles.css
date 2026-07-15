@@ -432,3 +432,49 @@ footer { border-top: 1px solid var(--line); padding: 3rem 0 2rem; color: var(--m
 .terminal pre .c { color: #93a097; }
 .terminal pre b { color: var(--green-strong); }
 .terminal .copy { background: #fff; color: var(--green-strong); border: 1px solid var(--green-100); }
+
+
+/* =========================================================================
+   v6 — compact hero so headline + lead + buttons + terminal fit in 100vh
+   ========================================================================= */
+.hero { padding: 4.5rem 0 2rem; }
+.hero h1 { font-size: clamp(2.1rem, 4.8vw, 3.5rem); margin-bottom: 1rem; }
+.hero p.lead { font-size: clamp(1rem, 1.9vw, 1.18rem); margin-bottom: 1.5rem; max-width: 620px; }
+.hero .terminal { margin-top: 1.5rem; max-width: 680px; }
+.hero .terminal pre { font-size: 0.8rem; padding: 1rem 1.2rem; line-height: 1.6; }
+.hero .terminal .terminal-bar { padding: 0.5rem 0.8rem; }
+
+/* If the viewport is short, let the hero grow instead of clipping content. */
+@media (max-height: 720px) { .hero { min-height: auto; padding: 6rem 0 3rem; } }
+
+
+/* =========================================================================
+   v7 — hero fits ENTIRE content (headline + lead + buttons + terminal) in
+   one screen, centered; scales down on shorter viewports instead of clipping.
+   ========================================================================= */
+.hero { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 4.5rem 1rem 1.5rem; }
+.hero .wrap { width: 100%; }
+.hero h1 { font-size: clamp(1.9rem, 4vw, 3.2rem); line-height: 1.06; margin: 0 0 0.9rem; }
+.hero p.lead { font-size: clamp(0.95rem, 1.6vw, 1.12rem); margin: 0 auto 1.3rem; max-width: 600px; }
+.hero .cta { margin: 0; }
+.hero .terminal { margin: 1.3rem auto 0; max-width: 640px; }
+.hero .terminal pre { font-size: 0.76rem; padding: 0.9rem 1.1rem; line-height: 1.55; }
+.hero .terminal .terminal-bar { padding: 0.45rem 0.75rem; }
+
+/* Shorter laptop viewports: shrink everything so it still fits + centers. */
+@media (max-height: 780px) {
+  .hero { min-height: 100vh; padding-top: 4.25rem; }
+  .hero h1 { font-size: clamp(1.7rem, 3.2vh, 2.6rem); }
+  .hero p.lead { font-size: 0.95rem; margin-bottom: 1rem; }
+  .hero .terminal { margin-top: 1rem; }
+  .hero .terminal pre { font-size: 0.7rem; padding: 0.8rem 1rem; }
+}
+@media (max-height: 640px) {
+  .hero { padding-top: 4rem; }
+  .hero h1 { font-size: 1.65rem; margin-bottom: 0.5rem; }
+  .hero p.lead { font-size: 0.84rem; margin-bottom: 0.75rem; max-width: 520px; }
+  .hero .cta .btn, .hero .copychip { padding: 0.5rem 0.9rem; font-size: 0.85rem; }
+  .hero .terminal { margin-top: 0.8rem; max-width: 560px; }
+  .hero .terminal pre { font-size: 0.6rem; padding: 0.6rem 0.8rem; line-height: 1.5; }
+  .hero .terminal .terminal-bar { padding: 0.3rem 0.55rem; }
+}
