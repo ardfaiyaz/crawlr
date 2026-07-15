@@ -16,7 +16,6 @@
   <meta property="og:image" content="https://01crawlr.vercel.app/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Crawlr — self-healing web scraper">
-  <meta name="twitter:description" content="AI-powered CLI for price & stock monitoring that repairs its own selectors when sites change.">
   <meta name="twitter:image" content="https://01crawlr.vercel.app/og-image.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,24 +40,24 @@
       <div class="nav-links">
         <a href="#features">Features</a>
         <a href="#how" class="hide-sm">How it works</a>
-        <a href="#faq" class="hide-sm">FAQ</a>
+        <a href="docs.html">Docs</a>
         <a class="icon-link" href="https://pypi.org/project/crawlr/" target="_blank" rel="noopener" aria-label="PyPI">
           <img src="https://cdn.simpleicons.org/pypi/0e1a12" alt="PyPI" width="22" height="22">
         </a>
-        <a class="btn btn-solid btn-sm" href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener">★ Star on GitHub</a>
+        <a class="btn btn-solid btn-sm" href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener">★ Star</a>
       </div>
     </div>
   </nav>
 
-  <!-- 1. Hero -->
+  <!-- Hero -->
   <header class="hero">
     <div class="wrap">
       <span class="eyebrow" data-aos="fade-down"><span class="dot"></span> Command-line · Self-healing · Zero-config</span>
       <h1 data-aos="fade-up">Track competitor prices<br><span class="accent">without your scraper breaking.</span></h1>
       <p class="lead" data-aos="fade-up" data-aos-delay="80">
-        Crawlr is an AI-powered, self-healing web scraper for e-commerce price &amp;
-        stock monitoring. When a site changes its layout, Crawlr repairs its own
-        selectors — so your monitoring never silently dies.
+        An AI-powered, self-healing web scraper for e-commerce price &amp; stock monitoring.
+        When a site changes its layout, Crawlr repairs its own selectors — so your
+        monitoring never silently dies.
       </p>
       <div class="cta" data-aos="fade-up" data-aos-delay="160">
         <a class="btn btn-solid" href="#how">Get started</a>
@@ -67,30 +66,17 @@
           <span class="copychip-icon" aria-hidden="true">⧉</span>
         </button>
       </div>
-      <div class="badges" data-aos="fade-up" data-aos-delay="200">
-        <img src="https://img.shields.io/pypi/v/crawlr?color=2a6833&label=PyPI" alt="PyPI version">
-        <img src="https://img.shields.io/pypi/pyversions/crawlr?color=2a6833" alt="Python versions">
-        <img src="https://img.shields.io/badge/license-MIT-2a6833" alt="MIT license">
-        <img src="https://img.shields.io/github/stars/ardfaiyaz/crawlr?style=flat&color=2a6833" alt="GitHub stars">
-      </div>
-      <pre class="hero-demo" data-aos="zoom-in" data-aos-delay="240"><span class="p">$ crawlr watch "https://store.example/product/123" --target 25</span>
+      <div class="terminal" data-aos="zoom-in" data-aos-delay="220">
+        <div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">crawlr — zsh</span></div>
+        <pre><span class="p">$ crawlr watch "https://store.example/product/123" --target 25</span>
 Watching site #1 (trigger=price_below, target $25, every 60m)
 
 <span class="p">$ crawlr watchlist</span>
  ID  Product              Current  Was    Change   Stock  Status
  1   Wireless Headphones  <b>$219</b>     $249   <b>▼ 12%</b>   yes    price dropped</pre>
+      </div>
     </div>
   </header>
-
-  <!-- Stats strip -->
-  <section class="stats" data-aos="fade-up">
-    <div class="wrap">
-      <div class="stat"><span class="num">0</span><span class="lbl">config to start</span></div>
-      <div class="stat"><span class="num">$0</span><span class="lbl">to run (offline mode)</span></div>
-      <div class="stat"><span class="num">6</span><span class="lbl">-layer extraction pipeline</span></div>
-      <div class="stat"><span class="num">MIT</span><span class="lbl">open source</span></div>
-    </div>
-  </section>
 
   <!-- Who it's for -->
   <section id="use-cases">
@@ -106,21 +92,21 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
     </div>
   </section>
 
-  <!-- 2. Features -->
+  <!-- Features (alternating bento) -->
   <section id="features">
     <div class="wrap">
       <h2 data-aos="fade-up">Everything you need to monitor a market</h2>
       <p class="section-sub" data-aos="fade-up">Built for continuous, hands-off competitor monitoring.</p>
-      <div class="grid">
-        <div class="card" data-aos="fade-up"><div class="tile">↻</div><h3>Self-healing selectors</h3><p>Detects breakage after a redesign and regenerates selectors automatically — no maintenance.</p></div>
-        <div class="card" data-aos="fade-up" data-aos-delay="60"><div class="tile">$</div><h3>Price &amp; stock tracking</h3><p>Watch any product's price and availability, with full history and change detection.</p></div>
-        <div class="card" data-aos="fade-up" data-aos-delay="120"><div class="tile">!</div><h3>Flexible alert triggers</h3><p>Alert on any change, price drops, a target price, or back-in-stock — your choice, per watch.</p></div>
-        <div class="card" data-aos="fade-up"><div class="tile">⌘</div><h3>Rules template</h3><p>Describe what happens in different circumstances in one editable <code>crawlr.rules.yaml</code>.</p></div>
-        <div class="card" data-aos="fade-up" data-aos-delay="60"><div class="tile">◇</div><h3>Any site, no code</h3><p>Ships with e-commerce schemas; add new verticals (jobs, real estate) as simple YAML.</p></div>
-        <div class="card" data-aos="fade-up" data-aos-delay="120"><div class="tile">⚑</div><h3>Alerts anywhere</h3><p>Webhook, Slack, and email notifications when something you care about changes.</p></div>
-        <div class="card" data-aos="fade-up"><div class="tile">∅</div><h3>Runs free &amp; offline</h3><p>Works with zero API keys via the heuristic engine. Add an OpenAI key only if you want.</p></div>
-        <div class="card" data-aos="fade-up" data-aos-delay="60"><div class="tile">⧉</div><h3>Anti-bot resilience</h3><p>Proxy rotation, robots.txt compliance, request jitter, and JS rendering when needed.</p></div>
-        <div class="card" data-aos="fade-up" data-aos-delay="120"><div class="tile">⇅</div><h3>Scales quietly</h3><p>Concurrent monitoring, a built-in scheduler daemon, and SQLite or Postgres storage.</p></div>
+      <div class="bento">
+        <div class="card" data-aos="fade-right"><div class="tile">↻</div><div><h3>Self-healing selectors</h3><p>Detects breakage after a redesign and regenerates selectors automatically — no maintenance.</p></div></div>
+        <div class="card" data-aos="fade-left"><div class="tile">$</div><div><h3>Price &amp; stock tracking</h3><p>Watch any product's price and availability, with full history and change detection.</p></div></div>
+        <div class="card" data-aos="fade-right"><div class="tile">!</div><div><h3>Flexible alert triggers</h3><p>Alert on any change, price drops, a target price, or back-in-stock — your choice, per watch.</p></div></div>
+        <div class="card" data-aos="fade-left"><div class="tile">⌘</div><div><h3>Rules template</h3><p>Describe what happens in different circumstances in one editable <code>crawlr.rules.yaml</code>.</p></div></div>
+        <div class="card" data-aos="fade-right"><div class="tile">◇</div><div><h3>Any site, no code</h3><p>Ships with e-commerce schemas; add new verticals (jobs, real estate) as simple YAML.</p></div></div>
+        <div class="card" data-aos="fade-left"><div class="tile">⚑</div><div><h3>Alerts anywhere</h3><p>Webhook, Slack, and email notifications when something you care about changes.</p></div></div>
+        <div class="card" data-aos="fade-right"><div class="tile">∅</div><div><h3>Runs free &amp; offline</h3><p>Works with zero API keys via the heuristic engine. Add an OpenAI key only if you want.</p></div></div>
+        <div class="card" data-aos="fade-left"><div class="tile">⧉</div><div><h3>Anti-bot resilience</h3><p>Proxy rotation, robots.txt compliance, request jitter, and JS rendering when needed.</p></div></div>
+        <div class="card" data-aos="fade-right"><div class="tile">⇅</div><div><h3>Scales quietly</h3><p>Concurrent monitoring, a built-in scheduler daemon, and SQLite or Postgres storage.</p></div></div>
       </div>
     </div>
   </section>
@@ -145,28 +131,26 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
     </div>
   </section>
 
-  <!-- 3. Under the hood -->
+  <!-- Under the hood: animated vertical progress bar -->
   <section id="pipeline">
     <div class="wrap">
       <h2 data-aos="fade-up">Under the hood</h2>
       <p class="section-sub" data-aos="fade-up">A layered pipeline where every stage cross-checks the next — for accuracy and stability.</p>
-      <div class="pipeline">
-        <div class="layer" data-aos="fade-right"><span class="k">01</span><h4>Fetch</h4><p>Static → auto JS, proxies, robots, jitter.</p></div>
-        <div class="arrow" data-aos="fade-in">→</div>
-        <div class="layer" data-aos="fade-right" data-aos-delay="60"><span class="k">02</span><h4>Structured data</h4><p>JSON-LD, microdata &amp; OpenGraph — the reliable source.</p></div>
-        <div class="arrow" data-aos="fade-in" data-aos-delay="60">→</div>
-        <div class="layer" data-aos="fade-right" data-aos-delay="120"><span class="k">03</span><h4>Selectors</h4><p>Cached CSS with self-healing on breakage.</p></div>
-        <div class="arrow" data-aos="fade-in" data-aos-delay="120">→</div>
-        <div class="layer" data-aos="fade-right" data-aos-delay="180"><span class="k">04</span><h4>Consensus</h4><p>Merge sources, resolve disagreements, score confidence.</p></div>
-        <div class="arrow" data-aos="fade-in" data-aos-delay="180">→</div>
-        <div class="layer" data-aos="fade-right" data-aos-delay="240"><span class="k">05</span><h4>Validate</h4><p>Types, required fields &amp; plausibility guard.</p></div>
-        <div class="arrow" data-aos="fade-in" data-aos-delay="240">→</div>
-        <div class="layer" data-aos="fade-right" data-aos-delay="300"><span class="k">06</span><h4>Alert</h4><p>Only real, meaningful changes reach you.</p></div>
+      <div class="pipeline-vert" data-aos="fade-up">
+        <div class="pl-track"><span class="pl-flow"></span></div>
+        <ol class="pl-steps">
+          <li class="pl-step"><span class="pl-k">01</span><h4>Fetch</h4><p>Static → auto JS, proxy rotation, robots.txt, request jitter.</p></li>
+          <li class="pl-step"><span class="pl-k">02</span><h4>Structured data</h4><p>JSON-LD, microdata &amp; OpenGraph — the reliable, redesign-proof source.</p></li>
+          <li class="pl-step"><span class="pl-k">03</span><h4>Selectors</h4><p>Cached CSS selectors with self-healing regeneration on breakage.</p></li>
+          <li class="pl-step"><span class="pl-k">04</span><h4>Consensus</h4><p>Merge sources, resolve disagreements, and score per-field confidence.</p></li>
+          <li class="pl-step"><span class="pl-k">05</span><h4>Validate</h4><p>Types, required fields, and a plausibility guard against bad data.</p></li>
+          <li class="pl-step"><span class="pl-k">06</span><h4>Alert</h4><p>Only real, meaningful changes reach you — via your chosen trigger.</p></li>
+        </ol>
       </div>
     </div>
   </section>
 
-  <!-- 4. How to use it -->
+  <!-- How to use it -->
   <section id="how">
     <div class="wrap">
       <h2 data-aos="fade-up">How to use it</h2>
@@ -176,7 +160,9 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
         <div class="step" data-aos="fade-up" data-aos-delay="80"><div class="n">2</div><h3>Watch a product</h3><p>Point Crawlr at a product URL and set an optional target price.</p></div>
         <div class="step" data-aos="fade-up" data-aos-delay="160"><div class="n">3</div><h3>Let it monitor</h3><p>Run the scheduler and get alerted when the price or stock changes.</p></div>
       </div>
-      <pre class="light" data-aos="fade-up"><span class="c"># 1 — install (one line, no clone needed)</span>
+      <div class="terminal" data-aos="fade-up">
+        <div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div>
+        <pre><span class="c"># 1 — install (one line, no clone needed)</span>
 <span class="p">pipx install crawlr</span>
 
 <span class="c"># 2 — watch a product's price and stock</span>
@@ -185,6 +171,7 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
 <span class="c"># 3 — see your watchlist and keep monitoring</span>
 <span class="p">crawlr watchlist</span>
 <span class="p">crawlr monitor --daemon</span></pre>
+      </div>
     </div>
   </section>
 
@@ -193,13 +180,16 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
     <div class="wrap">
       <h2 data-aos="fade-up">Use it as a service</h2>
       <p class="section-sub" data-aos="fade-up">Run the built-in JSON API and drive Crawlr from any app or language.</p>
-      <pre data-aos="fade-up"><span class="c"># start the API (protect it with a key)</span>
+      <div class="terminal" data-aos="fade-up">
+        <div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div>
+        <pre><span class="c"># start the API (protect it with a key)</span>
 <span class="p">CRAWLR_API_KEY=secret crawlr serve --host 0.0.0.0 --port 8000</span>
 
 <span class="c"># watch a product from anywhere</span>
 <span class="p">curl -X POST http://localhost:8000/api/watch \
   -H "X-API-Key: secret" \
   -d '{"url":"https://store.example/p/1","trigger":"price_below","target_price":25}'</span></pre>
+      </div>
       <p class="verticals" data-aos="fade-up">
         Built-in schemas:
         <span class="pill">product</span><span class="pill">product_list</span>
@@ -209,39 +199,33 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
     </div>
   </section>
 
-  <!-- 5. FAQ -->
+  <!-- FAQ -->
   <section id="faq">
     <div class="wrap">
       <h2 data-aos="fade-up">FAQ</h2>
-      <p class="section-sub" data-aos="fade-up">The quick answers.</p>
+      <p class="section-sub" data-aos="fade-up">The quick answers. Full details in the <a href="docs.html">docs</a>.</p>
       <div class="faq" data-aos="fade-up">
         <details>
           <summary>Do I need an API key?</summary>
           <p>No. Crawlr runs fully offline using a free heuristic selector engine. An OpenAI or
-            Anthropic key is optional and only improves accuracy on unusual site layouts — and even
-            then the model runs once per site, so cost is tiny.</p>
+            Anthropic key is optional and only improves accuracy on unusual layouts — and even then
+            the model runs once per site, so cost is tiny.</p>
         </details>
         <details>
           <summary>What happens when a site changes its layout?</summary>
-          <p>That's the whole point. Crawlr detects when its cached selectors stop matching and
-            automatically regenerates them — so your monitoring keeps working instead of silently
-            breaking.</p>
+          <p>Crawlr detects when its cached selectors stop matching and automatically regenerates
+            them — so your monitoring keeps working instead of silently breaking.</p>
         </details>
         <details>
           <summary>How do I get alerted?</summary>
           <p>Choose a trigger per watch — any change, price drop, a target price, or back-in-stock —
             and connect a webhook, Slack, or email. For richer logic, edit a single
-            <code>crawlr.rules.yaml</code> to describe what happens in each circumstance.</p>
+            <code>crawlr.rules.yaml</code>.</p>
         </details>
         <details>
           <summary>Can it scrape sites other than shops?</summary>
-          <p>Yes. The engine is general-purpose; e-commerce ships out of the box, and you can add
-            new verticals (jobs, real estate, leads) as plain YAML schemas — no code.</p>
-        </details>
-        <details>
-          <summary>Where does it run?</summary>
-          <p>Anywhere Python runs. Use cron or the built-in <code>--daemon</code> on any always-on
-            machine, or <code>docker compose up</code> to run the scheduler with Postgres.</p>
+          <p>Yes. The engine is general-purpose; add new verticals (jobs, real estate, leads) as
+            plain YAML schemas — no code.</p>
         </details>
         <details>
           <summary>Is it legal to use?</summary>
@@ -252,14 +236,14 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
     </div>
   </section>
 
-  <!-- 6. CTA -->
+  <!-- CTA -->
   <section class="cta-band" data-aos="zoom-in">
     <div class="wrap">
       <h2>Start monitoring in one command.</h2>
       <p>Free, offline, and self-healing. Install it and watch your first product in under a minute.</p>
       <div class="cta">
         <a class="btn btn-solid" href="https://pypi.org/project/crawlr/" target="_blank" rel="noopener">Install from PyPI</a>
-        <a class="btn btn-ghost" href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener">Star on GitHub</a>
+        <a class="btn btn-ghost" href="docs.html">Read the docs</a>
       </div>
     </div>
   </section>
@@ -275,11 +259,12 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
         <h5>Product</h5>
         <a href="#features">Features</a>
         <a href="#how">How it works</a>
+        <a href="docs.html">Docs</a>
         <a href="#faq">FAQ</a>
       </div>
       <div class="footer-col">
         <h5>Resources</h5>
-        <a href="https://github.com/ardfaiyaz/crawlr#readme" target="_blank" rel="noopener">Docs</a>
+        <a href="https://github.com/ardfaiyaz/crawlr#readme" target="_blank" rel="noopener">README</a>
         <a href="https://github.com/ardfaiyaz/crawlr/tree/main/examples" target="_blank" rel="noopener">Examples</a>
         <a href="https://pypi.org/project/crawlr/" target="_blank" rel="noopener">PyPI</a>
         <a href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener">GitHub</a>
@@ -292,36 +277,6 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
   </footer>
 
   <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-  <script>
-    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    AOS.init({ duration: 650, easing: "ease-in-out", once: true, offset: 80, disable: reduce });
-
-    // Copy-to-clipboard buttons on code blocks.
-    document.querySelectorAll("pre").forEach(function (pre) {
-      var text = pre.innerText;
-      var btn = document.createElement("button");
-      btn.type = "button"; btn.className = "copy"; btn.textContent = "Copy";
-      btn.addEventListener("click", function () {
-        navigator.clipboard.writeText(text).then(function () {
-          btn.textContent = "Copied";
-          setTimeout(function () { btn.textContent = "Copy"; }, 1200);
-        });
-      });
-      pre.appendChild(btn);
-    });
-
-    // Click-to-copy chips (e.g. the hero install command).
-    document.querySelectorAll(".copychip").forEach(function (chip) {
-      chip.addEventListener("click", function () {
-        navigator.clipboard.writeText(chip.getAttribute("data-copy")).then(function () {
-          chip.classList.add("copied");
-          var icon = chip.querySelector(".copychip-icon");
-          var original = icon.textContent;
-          icon.textContent = "✓";
-          setTimeout(function () { chip.classList.remove("copied"); icon.textContent = original; }, 1200);
-        });
-      });
-    });
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
