@@ -295,6 +295,27 @@ def validate_schema(path: str = typer.Argument(..., help="Path to a YAML/JSON sc
 
 
 @app.command()
+def digest(
+    hours: int = typer.Option(24, help="Look-back window in hours"),
+    send: bool = typer.Option(False, help="Also dispatch to configured alert sinks"),
+) -> None:
+    """Summarize everything that changed across all watches over a window."""
+    storage.init_db()
+    from . import digest as digest_mod
+
+    report = digest_mod.build(hours)
+    if report["total"] == 0:
+        console.print(f"[dim]No changes in the last {hours}h.[/dim]")
+        return
+    console.print(f"[bold]{digest_mod.subject_for(report)}[/bold]\n")
+    for line in digest_mod.summarize_lines(report):
+        console.print(line if line.startswith("    ") else f"[green]{line}[/green]")
+    if send:
+        digest_mod.send(hours)
+        console.print("\n[green]Digest dispatched to configured alert sinks.[/green]")
+
+
+@app.command()
 def stats() -> None:
     """Show per-site health: runs, average confidence, self-heals."""
     storage.init_db()
