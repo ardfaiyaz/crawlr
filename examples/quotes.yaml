@@ -1,0 +1,16 @@
+# A custom schema for quotes.toscrape.com — copy into your schema dir:
+#   mkdir -p .crawlr/schemas && cp examples/quotes.yaml .crawlr/schemas/
+#   crawlr validate-schema .crawlr/schemas/quotes.yaml
+#   crawlr scrape "https://quotes.toscrape.com/" --schema quotes
+name: quotes
+item_selector: ".quote"
+fields:
+  - name: title
+    description: the quote text
+    type: text
+    selector: ".text"
+    required: true
+  - name: author
+    description: the author of the quote
+    type: text
+    selector: ".author"
