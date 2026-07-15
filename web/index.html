@@ -18,9 +18,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Animated abstract background -->
+  <div class="bg" aria-hidden="true">
+    <span class="blob b1"></span>
+    <span class="blob b2"></span>
+    <span class="blob b3"></span>
+    <span class="grid-overlay"></span>
+  </div>
+
   <nav>
     <div class="wrap">
       <a class="brand" href="/">
@@ -30,8 +39,13 @@
       <div class="nav-links">
         <a href="#features">Features</a>
         <a href="#how" class="hide-sm">How it works</a>
-        <a href="#faq">FAQ</a>
-        <a class="btn btn-solid btn-sm" href="https://github.com/ardfaiyaz/crawlr">GitHub</a>
+        <a href="#faq" class="hide-sm">FAQ</a>
+        <a class="icon-link" href="https://pypi.org/project/crawlr/" target="_blank" rel="noopener" aria-label="PyPI">
+          <img src="https://cdn.simpleicons.org/pypi/0e1a12" alt="PyPI" width="22" height="22">
+        </a>
+        <a class="icon-link" href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener" aria-label="GitHub">
+          <img src="https://cdn.simpleicons.org/github/0e1a12" alt="GitHub" width="22" height="22">
+        </a>
       </div>
     </div>
   </nav>
@@ -39,18 +53,20 @@
   <!-- 1. Hero -->
   <header class="hero">
     <div class="wrap">
-      <span class="eyebrow"><span class="dot"></span> Command-line · Self-healing · Zero-config</span>
-      <h1>Track competitor prices<br><span class="accent">without your scraper breaking.</span></h1>
-      <p class="lead">
+      <span class="eyebrow" data-aos="fade-down"><span class="dot"></span> Command-line · Self-healing · Zero-config</span>
+      <h1 data-aos="fade-up">Track competitor prices<br><span class="accent">without your scraper breaking.</span></h1>
+      <p class="lead" data-aos="fade-up" data-aos-delay="80">
         Crawlr is an AI-powered, self-healing web scraper for e-commerce price &amp;
         stock monitoring. When a site changes its layout, Crawlr repairs its own
         selectors — so your monitoring never silently dies.
       </p>
-      <div class="cta">
+      <div class="cta" data-aos="fade-up" data-aos-delay="160">
         <a class="btn btn-solid" href="#how">Get started</a>
-        <a class="btn btn-ghost" href="https://github.com/ardfaiyaz/crawlr">View on GitHub</a>
+        <a class="btn btn-ghost" href="https://pypi.org/project/crawlr/" target="_blank" rel="noopener">
+          <img src="https://cdn.simpleicons.org/pypi/2a6833" alt="" width="16" height="16"> pip install crawlr
+        </a>
       </div>
-      <pre class="hero-demo"><span class="p">$ crawlr watch "https://store.example/product/123" --target 25</span>
+      <pre class="hero-demo" data-aos="zoom-in" data-aos-delay="220"><span class="p">$ crawlr watch "https://store.example/product/123" --target 25</span>
 Watching site #1 (trigger=price_below, target $25, every 60m)
 
 <span class="p">$ crawlr watchlist</span>
@@ -59,38 +75,68 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
     </div>
   </header>
 
+  <!-- Stats strip -->
+  <section class="stats" data-aos="fade-up">
+    <div class="wrap">
+      <div class="stat"><span class="num">0</span><span class="lbl">config to start</span></div>
+      <div class="stat"><span class="num">$0</span><span class="lbl">to run (offline mode)</span></div>
+      <div class="stat"><span class="num">6</span><span class="lbl">extraction layers</span></div>
+      <div class="stat"><span class="num">1</span><span class="lbl">command to watch a product</span></div>
+    </div>
+  </section>
+
   <!-- 2. Features -->
   <section id="features">
     <div class="wrap">
-      <h2>Everything you need to monitor a market</h2>
-      <p class="section-sub">Built for continuous, hands-off competitor monitoring.</p>
+      <h2 data-aos="fade-up">Everything you need to monitor a market</h2>
+      <p class="section-sub" data-aos="fade-up">Built for continuous, hands-off competitor monitoring.</p>
       <div class="grid">
-        <div class="card"><div class="tile">↻</div><h3>Self-healing selectors</h3><p>Detects breakage after a redesign and regenerates selectors automatically — no maintenance.</p></div>
-        <div class="card"><div class="tile">$</div><h3>Price &amp; stock tracking</h3><p>Watch any product's price and availability, with full history and change detection.</p></div>
-        <div class="card"><div class="tile">!</div><h3>Flexible alert triggers</h3><p>Alert on any change, price drops, a target price, or back-in-stock — your choice, per watch.</p></div>
-        <div class="card"><div class="tile">⌘</div><h3>Rules template</h3><p>Describe what happens in different circumstances in one editable <code>crawlr.rules.yaml</code>.</p></div>
-        <div class="card"><div class="tile">◇</div><h3>Any site, no code</h3><p>Ships with e-commerce schemas; add new verticals (jobs, real estate) as simple YAML.</p></div>
-        <div class="card"><div class="tile">⚑</div><h3>Alerts anywhere</h3><p>Webhook, Slack, and email notifications when something you care about changes.</p></div>
-        <div class="card"><div class="tile">∅</div><h3>Runs free &amp; offline</h3><p>Works with zero API keys via the heuristic engine. Add an OpenAI key only if you want.</p></div>
-        <div class="card"><div class="tile">⧉</div><h3>Anti-bot resilience</h3><p>Proxy rotation, robots.txt compliance, request jitter, and JS rendering when needed.</p></div>
-        <div class="card"><div class="tile">⇅</div><h3>Scales quietly</h3><p>Concurrent monitoring, a built-in scheduler daemon, and SQLite or Postgres storage.</p></div>
+        <div class="card" data-aos="fade-up"><div class="tile">↻</div><h3>Self-healing selectors</h3><p>Detects breakage after a redesign and regenerates selectors automatically — no maintenance.</p></div>
+        <div class="card" data-aos="fade-up" data-aos-delay="60"><div class="tile">$</div><h3>Price &amp; stock tracking</h3><p>Watch any product's price and availability, with full history and change detection.</p></div>
+        <div class="card" data-aos="fade-up" data-aos-delay="120"><div class="tile">!</div><h3>Flexible alert triggers</h3><p>Alert on any change, price drops, a target price, or back-in-stock — your choice, per watch.</p></div>
+        <div class="card" data-aos="fade-up"><div class="tile">⌘</div><h3>Rules template</h3><p>Describe what happens in different circumstances in one editable <code>crawlr.rules.yaml</code>.</p></div>
+        <div class="card" data-aos="fade-up" data-aos-delay="60"><div class="tile">◇</div><h3>Any site, no code</h3><p>Ships with e-commerce schemas; add new verticals (jobs, real estate) as simple YAML.</p></div>
+        <div class="card" data-aos="fade-up" data-aos-delay="120"><div class="tile">⚑</div><h3>Alerts anywhere</h3><p>Webhook, Slack, and email notifications when something you care about changes.</p></div>
+        <div class="card" data-aos="fade-up"><div class="tile">∅</div><h3>Runs free &amp; offline</h3><p>Works with zero API keys via the heuristic engine. Add an OpenAI key only if you want.</p></div>
+        <div class="card" data-aos="fade-up" data-aos-delay="60"><div class="tile">⧉</div><h3>Anti-bot resilience</h3><p>Proxy rotation, robots.txt compliance, request jitter, and JS rendering when needed.</p></div>
+        <div class="card" data-aos="fade-up" data-aos-delay="120"><div class="tile">⇅</div><h3>Scales quietly</h3><p>Concurrent monitoring, a built-in scheduler daemon, and SQLite or Postgres storage.</p></div>
       </div>
     </div>
   </section>
 
-  <!-- 3. How to use it -->
+  <!-- 3. Under the hood -->
+  <section id="pipeline">
+    <div class="wrap">
+      <h2 data-aos="fade-up">Under the hood</h2>
+      <p class="section-sub" data-aos="fade-up">A layered pipeline where every stage cross-checks the next — for accuracy and stability.</p>
+      <div class="pipeline">
+        <div class="layer" data-aos="fade-right"><span class="k">01</span><h4>Fetch</h4><p>Static → auto JS, proxies, robots, jitter.</p></div>
+        <div class="arrow" data-aos="fade-in">→</div>
+        <div class="layer" data-aos="fade-right" data-aos-delay="60"><span class="k">02</span><h4>Structured data</h4><p>JSON-LD, microdata &amp; OpenGraph — the reliable source.</p></div>
+        <div class="arrow" data-aos="fade-in" data-aos-delay="60">→</div>
+        <div class="layer" data-aos="fade-right" data-aos-delay="120"><span class="k">03</span><h4>Selectors</h4><p>Cached CSS with self-healing on breakage.</p></div>
+        <div class="arrow" data-aos="fade-in" data-aos-delay="120">→</div>
+        <div class="layer" data-aos="fade-right" data-aos-delay="180"><span class="k">04</span><h4>Consensus</h4><p>Merge sources, resolve disagreements, score confidence.</p></div>
+        <div class="arrow" data-aos="fade-in" data-aos-delay="180">→</div>
+        <div class="layer" data-aos="fade-right" data-aos-delay="240"><span class="k">05</span><h4>Validate</h4><p>Types, required fields &amp; plausibility guard.</p></div>
+        <div class="arrow" data-aos="fade-in" data-aos-delay="240">→</div>
+        <div class="layer" data-aos="fade-right" data-aos-delay="300"><span class="k">06</span><h4>Alert</h4><p>Only real, meaningful changes reach you.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. How to use it -->
   <section id="how">
     <div class="wrap">
-      <h2>How to use it</h2>
-      <p class="section-sub">Up and running in under a minute — no API key required.</p>
+      <h2 data-aos="fade-up">How to use it</h2>
+      <p class="section-sub" data-aos="fade-up">Up and running in under a minute — no API key required.</p>
       <div class="steps">
-        <div class="step"><div class="n">1</div><h3>Install</h3><p>Install in one line with <code>pipx</code> (or <code>pip</code>) — no clone needed.</p></div>
-        <div class="step"><div class="n">2</div><h3>Watch a product</h3><p>Point Crawlr at a product URL and set an optional target price.</p></div>
-        <div class="step"><div class="n">3</div><h3>Let it monitor</h3><p>Run the scheduler and get alerted when the price or stock changes.</p></div>
+        <div class="step" data-aos="fade-up"><div class="n">1</div><h3>Install</h3><p>Install in one line with <code>pipx</code> (or <code>pip</code>) — no clone needed.</p></div>
+        <div class="step" data-aos="fade-up" data-aos-delay="80"><div class="n">2</div><h3>Watch a product</h3><p>Point Crawlr at a product URL and set an optional target price.</p></div>
+        <div class="step" data-aos="fade-up" data-aos-delay="160"><div class="n">3</div><h3>Let it monitor</h3><p>Run the scheduler and get alerted when the price or stock changes.</p></div>
       </div>
-      <pre class="light"><span class="c"># 1 — install (one line, no clone needed)</span>
-<span class="p">pipx install "git+https://github.com/ardfaiyaz/crawlr.git"</span>
-<span class="c"># once published to PyPI:  pipx install crawlr</span>
+      <pre class="light" data-aos="fade-up"><span class="c"># 1 — install (one line, no clone needed)</span>
+<span class="p">pipx install crawlr</span>
 
 <span class="c"># 2 — watch a product's price and stock</span>
 <span class="p">crawlr watch "https://store.example/product/123" --target 25</span>
@@ -101,12 +147,12 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
     </div>
   </section>
 
-  <!-- 4. FAQ -->
+  <!-- 5. FAQ -->
   <section id="faq">
     <div class="wrap">
-      <h2>FAQ</h2>
-      <p class="section-sub">The quick answers.</p>
-      <div class="faq">
+      <h2 data-aos="fade-up">FAQ</h2>
+      <p class="section-sub" data-aos="fade-up">The quick answers.</p>
+      <div class="faq" data-aos="fade-up">
         <details>
           <summary>Do I need an API key?</summary>
           <p>No. Crawlr runs fully offline using a free heuristic selector engine. An OpenAI or
@@ -144,22 +190,40 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
     </div>
   </section>
 
-  <!-- 5. Footer -->
+  <!-- 6. CTA -->
+  <section class="cta-band" data-aos="zoom-in">
+    <div class="wrap">
+      <h2>Start monitoring in one command.</h2>
+      <p>Free, offline, and self-healing. Install it and watch your first product in under a minute.</p>
+      <div class="cta">
+        <a class="btn btn-solid" href="https://pypi.org/project/crawlr/" target="_blank" rel="noopener">Install from PyPI</a>
+        <a class="btn btn-ghost" href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener">Star on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
   <footer>
     <div class="wrap">
       <a class="brand" href="/"><img src="logo.png" alt="Crawlr logo"><span class="word">crawlr</span></a>
-      <a href="https://github.com/ardfaiyaz/crawlr">github.com/ardfaiyaz/crawlr</a>
+      <div class="footer-links">
+        <a href="https://pypi.org/project/crawlr/" target="_blank" rel="noopener" aria-label="PyPI">
+          <img src="https://cdn.simpleicons.org/pypi/6f7d73" alt="PyPI" width="20" height="20"></a>
+        <a href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener" aria-label="GitHub">
+          <img src="https://cdn.simpleicons.org/github/6f7d73" alt="GitHub" width="20" height="20"></a>
+      </div>
     </div>
   </footer>
 
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
   <script>
-    // Add a copy-to-clipboard button to every code block.
+    AOS.init({ duration: 700, easing: "ease-in-out", once: false, mirror: true, offset: 80 });
+
+    // Copy-to-clipboard buttons on code blocks.
     document.querySelectorAll("pre").forEach(function (pre) {
       var text = pre.innerText;
       var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "copy";
-      btn.textContent = "Copy";
+      btn.type = "button"; btn.className = "copy"; btn.textContent = "Copy";
       btn.addEventListener("click", function () {
         navigator.clipboard.writeText(text).then(function () {
           btn.textContent = "Copied";
