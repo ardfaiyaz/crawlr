@@ -54,7 +54,6 @@
   <!-- Hero -->
   <header class="hero">
     <div class="wrap">
-      <span class="eyebrow" data-aos="fade-down"><span class="dot"></span> Command-line · Self-healing · Zero-config</span>
       <h1 data-aos="fade-up">Track competitor prices<br><span class="accent">without your scraper breaking.</span></h1>
       <p class="lead" data-aos="fade-up" data-aos-delay="80">
         An AI-powered, self-healing web scraper for e-commerce price &amp; stock monitoring.
@@ -67,6 +66,15 @@
           <span class="mono">$ pip install crawlr</span>
           <span class="copychip-icon" aria-hidden="true">⧉</span>
         </button>
+      </div>
+      <div class="terminal" data-aos="fade-up" data-aos-delay="220">
+        <div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">crawlr — zsh</span></div>
+        <pre><span class="p">$ crawlr watch "https://store.example/product/123" --target 25</span>
+Watching site #1 (trigger=price_below, target $25, every 60m)
+
+<span class="p">$ crawlr watchlist</span>
+ ID  Product              Current  Was    Change   Stock  Status
+ 1   Wireless Headphones  <b>$219</b>     $249   <b>▼ 12%</b>   yes    price dropped</pre>
       </div>
     </div>
   </header>
