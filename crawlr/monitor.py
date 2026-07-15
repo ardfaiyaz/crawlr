@@ -1,18 +1,23 @@
-"""Monitoring layer: run scrapes, persist snapshots, and detect changes.
+"""Monitoring layer: run scrapes, persist snapshots, detect changes, alert.
 
 `run_once` scrapes a single site, stores the run, diffs it against the previous
-run, and logs any changes (e.g. price drops, stock changes). `run_due` iterates
-all active sites whose interval has elapsed. Scheduling is intentionally simple
-and stateless so it can be driven by cron, a loop, or an external scheduler.
+run, logs changes, and dispatches alerts. `run_due` / `run_due_async` iterate
+all active sites whose interval has elapsed (sync, or concurrently for scale).
+Scheduling is stateless so it can be driven by cron, the built-in daemon, or an
+external scheduler.
 """
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
+from typing import Callable
 
-from . import storage
+from . import alerts, db, storage
 from .extractor import scrape
 from .models import ExtractionResult, ExtractionSchema, PriceChange
+
+SchemaResolver = Callable[[str], "ExtractionSchema | None"]
 
 
 def _key_field(schema: ExtractionSchema) -> str | None:
@@ -75,16 +80,15 @@ def run_once(
     schema: ExtractionSchema,
     watch_fields: list[str] | None = None,
     force_js: bool = False,
+    send_alerts: bool = True,
 ) -> tuple[ExtractionResult, list[PriceChange]]:
-    """Scrape a site once, store the run, and return detected changes."""
+    """Scrape a site once, store the run, detect changes, and dispatch alerts."""
     site = storage.get_site(site_id)
     if site is None:
         raise ValueError(f"No site with id {site_id}")
 
     key_field = _key_field(schema)
-    watch = watch_fields or [
-        f.name for f in schema.fields if f.name not in (key_field,)
-    ]
+    watch = watch_fields or [f.name for f in schema.fields if f.name != key_field]
 
     result = scrape(site["url"], schema, force_js=force_js)
 
@@ -94,6 +98,7 @@ def run_once(
         result.records,
         healed=result.healed,
         used_llm=result.used_llm,
+        confidence=result.confidence,
         fetched_at=result.fetched_at.isoformat(),
         key_field=key_field,
     )
@@ -103,14 +108,16 @@ def run_once(
         prev_clean = [{k: v for k, v in r.items() if k != "item_key"} for r in previous]
         changes = diff_records(prev_clean, result.records, key_field, watch)
         storage.record_changes(site_id, changes)
+        if send_alerts and changes:
+            alerts.notify(site["url"], changes)
 
     return result, changes
 
 
 def _minutes_since_last_run(site_id: int, now: datetime) -> float:
-    with storage._connect() as conn:  # noqa: SLF001 - internal helper reuse
+    with db.connect() as conn:
         row = conn.execute(
-            "SELECT fetched_at FROM runs WHERE site_id=? ORDER BY fetched_at DESC LIMIT 1",
+            db.q("SELECT fetched_at FROM runs WHERE site_id=? ORDER BY fetched_at DESC LIMIT 1"),
             (site_id,),
         ).fetchone()
     if not row:
@@ -121,24 +128,55 @@ def _minutes_since_last_run(site_id: int, now: datetime) -> float:
     return (now - last).total_seconds() / 60.0
 
 
+def _due_sites() -> list[dict]:
+    now = datetime.now(timezone.utc)
+    return [
+        site
+        for site in storage.list_sites(active_only=True)
+        if _minutes_since_last_run(site["id"], now) >= site["interval_minutes"]
+    ]
+
+
 def run_due(
-    schema_resolver,
+    schema_resolver: SchemaResolver,
     watch_fields: list[str] | None = None,
     force_js: bool = False,
 ) -> dict[int, list[PriceChange]]:
-    """Run all active sites whose interval has elapsed.
-
-    `schema_resolver(schema_name) -> ExtractionSchema` supplies the schema for a
-    given site (verticals register their schemas here).
-    """
-    now = datetime.now(timezone.utc)
+    """Run all active sites whose interval has elapsed (sequentially)."""
     results: dict[int, list[PriceChange]] = {}
-    for site in storage.list_sites(active_only=True):
-        if _minutes_since_last_run(site["id"], now) < site["interval_minutes"]:
-            continue
+    for site in _due_sites():
         schema = schema_resolver(site["schema_name"])
         if schema is None:
             continue
         _, changes = run_once(site["id"], schema, watch_fields, force_js)
         results[site["id"]] = changes
+    return results
+
+
+async def run_due_async(
+    schema_resolver: SchemaResolver,
+    watch_fields: list[str] | None = None,
+    force_js: bool = False,
+    concurrency: int = 5,
+) -> dict[int, list[PriceChange]]:
+    """Run all due sites concurrently with a bounded worker pool (roadmap item 5).
+
+    Each site's (synchronous) scrape runs in a worker thread, so many sites are
+    fetched in parallel without a full async rewrite of the fetch stack.
+    """
+    due = _due_sites()
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+    results: dict[int, list[PriceChange]] = {}
+
+    async def _worker(site: dict) -> None:
+        schema = schema_resolver(site["schema_name"])
+        if schema is None:
+            return
+        async with semaphore:
+            _, changes = await asyncio.to_thread(
+                run_once, site["id"], schema, watch_fields, force_js
+            )
+        results[site["id"]] = changes
+
+    await asyncio.gather(*(_worker(site) for site in due))
     return results

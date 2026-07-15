@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: crawlr
+      POSTGRES_PASSWORD: crawlr
+      POSTGRES_DB: crawlr
+    volumes:
+      - crawlr-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crawlr"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Dashboard (http://localhost:8000)
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CRAWLR_DATABASE_URL: postgresql://crawlr:crawlr@db:5432/crawlr
+      # Pass an LLM key here to enable AI selector generation (optional):
+      # CRAWLR_LLM_PROVIDER: openai
+      # CRAWLR_LLM_API_KEY: ${CRAWLR_LLM_API_KEY}
+    ports:
+      - "8000:8000"
+    command: ["crawlr", "serve", "--host", "0.0.0.0", "--port", "8000"]
+
+  # Background scheduler daemon (shares the same database).
+  scheduler:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CRAWLR_DATABASE_URL: postgresql://crawlr:crawlr@db:5432/crawlr
+    command: ["crawlr", "monitor", "--daemon", "--poll", "60", "--concurrency", "5"]
+
+volumes:
+  crawlr-pgdata:
