@@ -24,6 +24,9 @@ DATABASE_URL = os.getenv("CRAWLR_DATABASE_URL", "") or None
 # Directory scanned for user-defined YAML/JSON schema files.
 SCHEMA_DIR = Path(os.getenv("CRAWLR_SCHEMA_DIR", str(DATA_DIR / "schemas"))).resolve()
 
+# User-editable rules template: "in circumstance X, do action Y" for alerts.
+RULES_FILE = Path(os.getenv("CRAWLR_RULES_FILE", "crawlr.rules.yaml")).resolve()
+
 
 def _split_csv(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
