@@ -397,3 +397,38 @@ footer { border-top: 1px solid var(--line); padding: 3rem 0 2rem; color: var(--m
 @media (prefers-reduced-motion: reduce) {
   .blob, .pl-flow { animation: none; }
 }
+
+
+/* =========================================================================
+   v5 — 100vh centered hero, 4-up use cases, light terminals, GitHub icon
+   ========================================================================= */
+
+/* ---- Hero: full viewport height, vertically centered ---- */
+.hero { min-height: 100vh; display: flex; align-items: center; padding: 5rem 0; }
+.hero .wrap { width: 100%; }
+
+/* ---- "Who it's for": four big cards with a lively hover ---- */
+.usecase-grid { grid-template-columns: repeat(4, 1fr); gap: 1.25rem; }
+.usecase-grid .card {
+  padding: 2rem 1.6rem; min-height: 250px;
+  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.22s ease, border-color 0.2s ease;
+}
+.usecase-grid .card .tile {
+  width: 54px; height: 54px; font-size: 1.5rem; border-radius: 14px; margin-bottom: 1.15rem;
+  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+.usecase-grid .card h3 { font-size: 1.14rem; }
+.usecase-grid .card:hover { transform: translateY(-10px); box-shadow: 0 26px 55px rgba(42, 104, 51, 0.20); border-color: var(--green); }
+.usecase-grid .card:hover .tile { transform: scale(1.12) rotate(-6deg); }
+@media (max-width: 1000px) { .usecase-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .usecase-grid { grid-template-columns: 1fr; } }
+
+/* ---- Light-mode macOS terminal theme ---- */
+.terminal { background: #fbfdfb; border: 1px solid var(--line); box-shadow: 0 16px 44px rgba(16, 26, 18, 0.10); }
+.terminal-bar { background: #eef2ef; border-bottom: 1px solid var(--line); }
+.tterm { color: #8a978d; }
+.terminal pre { color: #1c2a22; }
+.terminal pre .p { color: var(--green); font-weight: 600; }
+.terminal pre .c { color: #93a097; }
+.terminal pre b { color: var(--green-strong); }
+.terminal .copy { background: #fff; color: var(--green-strong); border: 1px solid var(--green-100); }
