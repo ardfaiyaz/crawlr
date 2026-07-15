@@ -205,6 +205,18 @@ monkeypatched with local fixtures and selector generation uses the heuristic
 path. The same portable SQL is exercised on SQLite in CI and on Postgres in
 production.
 
+## Website &amp; docs
+
+Crawlr is a **command-line product**. The `web/` directory is a single static landing page
+(hero, features, how to use it, and an FAQ) — it deploys free on Vercel:
+
+1. Import the repo at [vercel.com/new](https://vercel.com/new).
+2. Set **Root Directory** to `web`.
+3. Framework preset: **Other** (no build step — it's static HTML/CSS).
+4. Deploy. You get a public URL like `https://crawlr.vercel.app`.
+
+Locally you can preview it with any static server, e.g. `python -m http.server -d web 3000`.
+
 ## Roadmap
 
 - Additional verticals shipped as YAML presets
