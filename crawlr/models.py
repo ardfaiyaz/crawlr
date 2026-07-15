@@ -61,6 +61,10 @@ class ExtractionResult(BaseModel):
     used_llm: bool = False
     fetched_at: datetime = Field(default_factory=_now)
     warnings: list[str] = Field(default_factory=list)
+    # Fraction (0..1) of required-field cells populated across all records.
+    confidence: float = 1.0
+    # False when any record fails schema validation.
+    valid: bool = True
 
     @property
     def count(self) -> int:
@@ -88,6 +92,11 @@ class PriceChange(BaseModel):
     old_value: str | None
     new_value: str | None
     changed_at: datetime = Field(default_factory=_now)
+
+    def item_key_display(self, n: int = 48) -> str:
+        """Short, human-friendly identifier for the changed item."""
+        key = self.product_url or ""
+        return key if len(key) <= n else key[: n - 3] + "..."
 
 
 class MonitoredSite(BaseModel):

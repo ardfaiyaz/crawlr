@@ -14,27 +14,32 @@ import re
 
 from selectolax.parser import HTMLParser, Node
 
-from . import llm, selector_cache
+from . import llm, selector_cache, usage
 from .fetcher import fetch
 from .models import ExtractionResult, ExtractionSchema, FieldSpec, FieldType
+from .validate import confidence_score, validate_records
 
 
 def scrape(url: str, schema: ExtractionSchema, force_js: bool = False) -> ExtractionResult:
     """Scrape a URL against a schema, self-healing selectors if they break."""
+    usage.begin_run()
     fetched = fetch(url, force_js=force_js)
     result = ExtractionResult(url=fetched.url, schema_name=schema.name)
+
+    if fetched.blocked:
+        result.warnings.append("Blocked by robots.txt (set CRAWLR_RESPECT_ROBOTS=false to override).")
+        return _finalize(result, [], schema)
+
     if fetched.rendered_with_js is False and _static_looked_empty(fetched.html):
         result.warnings.append("Page may require JS rendering (install the 'js' extra).")
 
     cached = selector_cache.get(url, schema.name)
-    used_llm = False
 
     if cached is not None:
         records = _extract(fetched.html, cached)
         if not _looks_broken(records, cached):
-            result.records = records
             result.used_llm = False
-            return result
+            return _finalize(result, records, cached)
         result.warnings.append("Cached selectors broke; regenerating (self-heal).")
 
     # Generate (or regenerate) selectors, cache them, extract.
@@ -42,11 +47,24 @@ def scrape(url: str, schema: ExtractionSchema, force_js: bool = False) -> Extrac
     selector_cache.put(url, healed_schema)
     records = _extract(fetched.html, healed_schema)
 
-    result.records = records
     result.healed = cached is not None
     result.used_llm = used_llm
     if _looks_broken(records, healed_schema):
         result.warnings.append("Extraction still incomplete after healing.")
+    return _finalize(result, records, healed_schema)
+
+
+def _finalize(
+    result: ExtractionResult, records: list[dict], schema: ExtractionSchema
+) -> ExtractionResult:
+    """Attach records plus confidence/validity signals to the result."""
+    result.records = records
+    result.confidence = confidence_score(records, schema)
+    valid, errors = validate_records(records, schema)
+    result.valid = valid
+    if errors:
+        # Keep the warning list compact.
+        result.warnings.append(f"{len(errors)} validation issue(s); first: {errors[0]}")
     return result
 
 
