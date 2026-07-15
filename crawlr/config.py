@@ -31,6 +31,14 @@ RULES_FILE = Path(os.getenv("CRAWLR_RULES_FILE", "crawlr.rules.yaml")).resolve()
 # treated as likely extraction errors and suppressed from alerts.
 MAX_PRICE_CHANGE_FACTOR = float(os.getenv("CRAWLR_MAX_PRICE_FACTOR", "20"))
 
+# Reliability: archive raw HTML snapshots for offline re-extraction & debugging.
+ARCHIVE_ENABLED = os.getenv("CRAWLR_ARCHIVE", "true").lower() == "true"
+SNAPSHOT_DIR = Path(os.getenv("CRAWLR_SNAPSHOT_DIR", str(DATA_DIR / "snapshots"))).resolve()
+
+# Only alert on field changes whose extraction confidence is at least this
+# (0.0 disables the gate). Uses per-field consensus confidence.
+MIN_FIELD_CONFIDENCE = float(os.getenv("CRAWLR_MIN_FIELD_CONFIDENCE", "0.0"))
+
 
 def _split_csv(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]

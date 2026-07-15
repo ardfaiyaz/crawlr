@@ -1,0 +1,22 @@
+name: real_estate
+item_selector: ".listing, .property-card, .result, article"
+fields:
+  - name: title
+    description: the property title or address
+    type: text
+    required: true
+  - name: price
+    description: the listing price
+    type: price
+    required: true
+  - name: location
+    description: the address, neighborhood, or area
+    type: text
+  - name: url
+    description: link to the listing detail page
+    type: url
+    attribute: href
+  - name: image
+    description: the main listing photo
+    type: image
+    attribute: src

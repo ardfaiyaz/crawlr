@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from . import alerts, db, normalize, storage, triggers
-from .config import MAX_PRICE_CHANGE_FACTOR
+from .config import MAX_PRICE_CHANGE_FACTOR, MIN_FIELD_CONFIDENCE
 from .extractor import scrape
 from .models import ExtractionResult, ExtractionSchema, PriceChange
 
@@ -110,6 +110,12 @@ def run_once(
         changes = diff_records(prev_clean, result.records, key_field, watch)
         # Plausibility guard: drop absurd price moves (likely extraction errors).
         changes = [c for c in changes if _plausible_change(c)]
+        # Field-confidence gate: skip changes on low-confidence fields.
+        if result.field_confidence and MIN_FIELD_CONFIDENCE > 0:
+            changes = [
+                c for c in changes
+                if result.field_confidence.get(c.field, 1.0) >= MIN_FIELD_CONFIDENCE
+            ]
         storage.record_changes(site_id, changes)
         if send_alerts and changes:
             # Only alert on changes matching the site's trigger / rules template.
