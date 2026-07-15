@@ -33,6 +33,28 @@ from .verticals import ecommerce
 
 _SUFFIXES = {".yaml", ".yml", ".json"}
 
+# Vertical presets shipped inside the package (jobs, real_estate, news, ...).
+_PRESETS_DIR = Path(__file__).parent / "presets"
+_presets_cache: dict[str, ExtractionSchema] | None = None
+
+
+def load_presets() -> dict[str, ExtractionSchema]:
+    """Load the bundled vertical presets (cached; they never change at runtime)."""
+    global _presets_cache
+    if _presets_cache is None:
+        out: dict[str, ExtractionSchema] = {}
+        if _PRESETS_DIR.exists():
+            for path in sorted(_PRESETS_DIR.iterdir()):
+                if path.suffix.lower() not in _SUFFIXES:
+                    continue
+                try:
+                    schema = _parse_file(path)
+                except (ValidationError, ValueError, yaml.YAMLError, json.JSONDecodeError):
+                    continue
+                out[schema.name] = schema
+        _presets_cache = out
+    return _presets_cache
+
 
 def _parse_file(path: Path) -> ExtractionSchema:
     text = path.read_text()
@@ -59,19 +81,24 @@ def load_user_schemas() -> dict[str, ExtractionSchema]:
 
 
 def resolve(name: str) -> ExtractionSchema | None:
-    """Resolve a schema by name: user-defined schemas take precedence."""
+    """Resolve a schema by name. Precedence: user files > presets > built-in."""
     user = load_user_schemas()
     if name in user:
         return user[name]
+    presets = load_presets()
+    if name in presets:
+        return presets[name]
     return ecommerce.resolve(name)
 
 
 def available() -> list[dict]:
-    """List all resolvable schemas with their source (built-in vs user)."""
+    """List all resolvable schemas with their source (built-in / preset / user)."""
     items: list[dict] = [
         {"name": name, "source": "built-in"}
         for name in ("product", "product_list")
     ]
+    for name in load_presets():
+        items.append({"name": name, "source": "preset"})
     for name in load_user_schemas():
         items.append({"name": name, "source": "user"})
     return items

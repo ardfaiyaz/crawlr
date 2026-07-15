@@ -1,0 +1,20 @@
+name: jobs
+item_selector: ".job-card, .job, li.result, article"
+fields:
+  - name: title
+    description: the job title
+    type: text
+    required: true
+  - name: company
+    description: the hiring company name
+    type: text
+  - name: location
+    description: the job location
+    type: text
+  - name: salary
+    description: the salary or pay range
+    type: text
+  - name: url
+    description: link to the job posting
+    type: url
+    attribute: href

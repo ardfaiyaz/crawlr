@@ -31,7 +31,30 @@ class FetchResult:
     html: str
     status_code: int
     rendered_with_js: bool = False
-    blocked: bool = False  # True when robots.txt disallowed the fetch
+    blocked: bool = False  # True when robots.txt disallowed or the site blocked us
+    blocked_reason: str | None = None
+
+
+# Markers that indicate an anti-bot challenge / block page.
+_BLOCK_MARKERS = (
+    "captcha",
+    "cloudflare",
+    "attention required",
+    "access denied",
+    "verify you are human",
+    "cf-browser-verification",
+    "just a moment",
+)
+
+
+def detect_block(status_code: int, html: str) -> str | None:
+    """Return a reason string if the response looks blocked, else None."""
+    if status_code in (401, 403, 429, 503):
+        return f"http {status_code}"
+    low = (html or "")[:5000].lower()
+    if any(marker in low for marker in _BLOCK_MARKERS):
+        return "anti-bot challenge"
+    return None
 
 
 # A small pool of realistic desktop User-Agents for optional rotation.
@@ -125,6 +148,12 @@ def _fetch_static(url: str) -> FetchResult:
         headers=headers, timeout=FETCH.timeout_seconds, follow_redirects=True, proxy=proxy
     ) as client:
         resp = client.get(url)
+        # Don't retry-storm on auth/rate-limit/forbidden — surface as a block.
+        if resp.status_code in (401, 403, 429):
+            return FetchResult(
+                url=str(resp.url), html=resp.text, status_code=resp.status_code,
+                blocked=True, blocked_reason=f"http {resp.status_code}",
+            )
         resp.raise_for_status()
         return FetchResult(url=str(resp.url), html=resp.text, status_code=resp.status_code)
 
@@ -156,9 +185,11 @@ def _fetch_js(url: str) -> FetchResult:
 
 
 def fetch(url: str, force_js: bool = False) -> FetchResult:
-    """Fetch a URL, honoring robots.txt and escalating to JS only when needed."""
+    """Fetch a URL: honor robots.txt, detect blocks, escalate to JS when needed."""
     if not _robots_allows(url):
-        return FetchResult(url=url, html="", status_code=0, blocked=True)
+        return FetchResult(
+            url=url, html="", status_code=0, blocked=True, blocked_reason="robots.txt"
+        )
 
     _respect_rate_limit(url)
 
@@ -166,6 +197,20 @@ def fetch(url: str, force_js: bool = False) -> FetchResult:
         return _fetch_js(url)
 
     result = _fetch_static(url)
+
+    # Block detection: a real browser sometimes clears anti-bot challenges.
+    reason = result.blocked_reason or detect_block(result.status_code, result.html)
+    if reason:
+        result.blocked = True
+        result.blocked_reason = reason
+        try:
+            rendered = _fetch_js(url)
+            if not detect_block(rendered.status_code, rendered.html):
+                return rendered
+        except RuntimeError:
+            pass
+        return result
+
     if _looks_like_js_shell(result.html):
         try:
             return _fetch_js(url)

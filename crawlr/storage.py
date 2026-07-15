@@ -266,3 +266,19 @@ def watchlist() -> list[dict]:
             }
         )
     return rows
+
+
+
+def site_stats() -> list[dict]:
+    """Per-site health metrics: run count, average confidence, heal count."""
+    with db.connect() as conn:
+        rows = conn.execute(
+            db.q(
+                "SELECT s.id AS id, s.url AS url, COUNT(r.id) AS runs, "
+                "AVG(r.confidence) AS avg_confidence, "
+                "SUM(r.healed) AS heals, SUM(r.used_llm) AS llm_runs "
+                "FROM sites s LEFT JOIN runs r ON r.site_id=s.id "
+                "GROUP BY s.id, s.url ORDER BY s.id"
+            )
+        ).fetchall()
+    return [dict(r) for r in rows]

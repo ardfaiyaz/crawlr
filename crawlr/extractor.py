@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from selectolax.parser import HTMLParser, Node
 
-from . import llm, normalize, selector_cache, structured, usage
+from . import archive, config, llm, normalize, selector_cache, structured, usage
 from .fetcher import fetch
 from .models import ExtractionResult, ExtractionSchema, FieldSpec, FieldType
 from .validate import confidence_score, validate_records
@@ -25,8 +25,12 @@ def scrape(url: str, schema: ExtractionSchema, force_js: bool = False) -> Extrac
     result = ExtractionResult(url=fetched.url, schema_name=schema.name)
 
     if fetched.blocked:
-        result.warnings.append("Blocked by robots.txt (set CRAWLR_RESPECT_ROBOTS=false to override).")
+        result.warnings.append(f"Blocked ({fetched.blocked_reason or 'unknown'}).")
         return _finalize(result, [], schema, "")
+
+    # Archive the raw HTML so it can be re-extracted offline / audited later.
+    if config.ARCHIVE_ENABLED:
+        archive.save(fetched.url, schema.name, fetched.html)
 
     if fetched.rendered_with_js is False and _static_looked_empty(fetched.html):
         result.warnings.append("Page may require JS rendering (install the 'js' extra).")
@@ -50,6 +54,26 @@ def scrape(url: str, schema: ExtractionSchema, force_js: bool = False) -> Extrac
     if _looks_broken(records, healed_schema):
         result.warnings.append("Extraction still incomplete after healing.")
     return _finalize(result, records, healed_schema, fetched.html)
+
+
+def reextract(url: str, schema: ExtractionSchema, html: str) -> ExtractionResult:
+    """Extract from already-fetched HTML with no network access.
+
+    Powers `crawlr replay` (re-run against an archived snapshot) and offline
+    selector testing. Uses cached selectors when they still work, else
+    regenerates them — same self-healing + consensus as a live scrape.
+    """
+    usage.begin_run()
+    result = ExtractionResult(url=url, schema_name=schema.name)
+    cached = selector_cache.get(url, schema.name)
+    if cached is not None:
+        records = _extract(html, cached)
+        if not _looks_broken(records, cached):
+            return _finalize(result, records, cached, html)
+    healed_schema, used_llm = llm.generate_selectors(schema, html)
+    records = _extract(html, healed_schema)
+    result.used_llm = used_llm
+    return _finalize(result, records, healed_schema, html)
 
 
 def _finalize(

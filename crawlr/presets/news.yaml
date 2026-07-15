@@ -1,0 +1,14 @@
+name: news
+item_selector: "article, .post, .story, .headline"
+fields:
+  - name: title
+    description: the article headline
+    type: text
+    required: true
+  - name: url
+    description: link to the full article
+    type: url
+    attribute: href
+  - name: date
+    description: the publication date
+    type: text
