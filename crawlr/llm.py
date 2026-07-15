@@ -225,8 +225,8 @@ def _match_intent(field: FieldSpec) -> list[tuple[str, str | None]]:
         FieldType.IMAGE: "image",
         FieldType.URL: "url",
     }
-    key = type_map.get(field.type)
-    return _HEURISTIC_PATTERNS.get(key, []) if key else []
+    type_key = type_map.get(field.type)
+    return _HEURISTIC_PATTERNS.get(type_key, []) if type_key else []
 
 
 def _generate_heuristic(schema: ExtractionSchema, html: str) -> ExtractionSchema:

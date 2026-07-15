@@ -15,11 +15,18 @@ DATA_DIR = Path(os.getenv("CRAWLR_DATA_DIR", "./.crawlr")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = DATA_DIR / "crawlr.db"
-SELECTOR_CACHE_PATH = DATA_DIR / "selectors.json"
 
 # Optional database URL. When it starts with "postgres", the Postgres backend is
 # used; otherwise Crawlr falls back to the local SQLite file above.
 DATABASE_URL = os.getenv("CRAWLR_DATABASE_URL", "") or None
+
+# Max size of the Postgres connection pool (only used when the optional
+# `psycopg_pool` package is installed; otherwise a direct connection is opened).
+PG_POOL_MAX = int(os.getenv("CRAWLR_PG_POOL_MAX", "10"))
+
+# Data retention: keep at most this many most-recent runs per site (older runs
+# and their records are pruned automatically after each scrape). 0 = keep all.
+RETENTION_RUNS = int(os.getenv("CRAWLR_RETENTION_RUNS", "0"))
 
 # Directory scanned for user-defined YAML/JSON schema files.
 SCHEMA_DIR = Path(os.getenv("CRAWLR_SCHEMA_DIR", str(DATA_DIR / "schemas"))).resolve()
