@@ -111,7 +111,18 @@ class AlertConfig:
     """Notification sinks + thresholds for change alerts."""
 
     webhook_url: str | None = os.getenv("CRAWLR_ALERT_WEBHOOK") or None
+    # Optional shared secret: when set, generic-webhook payloads are signed with
+    # an `X-Crawlr-Signature: sha256=<hmac>` header so receivers can verify them.
+    webhook_secret: str | None = os.getenv("CRAWLR_WEBHOOK_SECRET") or None
     slack_webhook_url: str | None = os.getenv("CRAWLR_ALERT_SLACK") or None
+    discord_webhook_url: str | None = os.getenv("CRAWLR_ALERT_DISCORD") or None
+    teams_webhook_url: str | None = os.getenv("CRAWLR_ALERT_TEAMS") or None
+    # ntfy.sh (or self-hosted) topic URL, e.g. https://ntfy.sh/my-crawlr-alerts.
+    ntfy_url: str | None = os.getenv("CRAWLR_ALERT_NTFY") or None
+    # Telegram bot alerts: create a bot via @BotFather, then set the token and
+    # your chat id (get it from @userinfobot). Free push notifications to phone.
+    telegram_bot_token: str | None = os.getenv("CRAWLR_ALERT_TELEGRAM_TOKEN") or None
+    telegram_chat_id: str | None = os.getenv("CRAWLR_ALERT_TELEGRAM_CHAT_ID") or None
     email_to: list[str] = field(
         default_factory=lambda: _split_csv(os.getenv("CRAWLR_ALERT_EMAIL_TO", ""))
     )
@@ -122,6 +133,9 @@ class AlertConfig:
     smtp_from: str | None = os.getenv("CRAWLR_SMTP_FROM") or None
     # Only alert on price drops of at least this fraction (0.1 == 10%).
     min_price_drop_pct: float = float(os.getenv("CRAWLR_ALERT_MIN_DROP", "0.0"))
+    # Suppress a repeat alert for the same (site, item, field) within this many
+    # minutes, so a flapping value can't spam you. 0 disables throttling.
+    throttle_minutes: int = int(os.getenv("CRAWLR_ALERT_THROTTLE_MINUTES", "0"))
     # Echo alerts to the console/log even when no sink is configured.
     console: bool = os.getenv("CRAWLR_ALERT_CONSOLE", "true").lower() == "true"
 

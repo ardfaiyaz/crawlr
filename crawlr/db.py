@@ -72,8 +72,19 @@ CREATE TABLE IF NOT EXISTS selectors (
     cache_key TEXT PRIMARY KEY,
     schema_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS alert_events (
+    id {_PK},
+    site_id INTEGER,
+    item_key TEXT,
+    field TEXT,
+    message TEXT NOT NULL,
+    sinks TEXT,
+    dedup_key TEXT,
+    created_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_records_site ON records(site_id, item_key, fetched_at);
 CREATE INDEX IF NOT EXISTS idx_changes_site ON changes(site_id, changed_at);
+CREATE INDEX IF NOT EXISTS idx_alerts_dedup ON alert_events(dedup_key, created_at);
 """
 
 

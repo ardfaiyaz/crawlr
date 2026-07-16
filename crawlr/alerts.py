@@ -1,8 +1,9 @@
 """Alerting: notify external sinks when monitored data changes (roadmap item 1).
 
 Sinks (all optional, configured via env): console/log, generic webhook, Slack
-incoming webhook, and email (SMTP). A simple rule layer decides which changes
-are worth alerting on (e.g. only price drops above a threshold).
+incoming webhook, Discord webhook, Telegram bot, and email (SMTP). A simple rule
+layer decides which changes are worth alerting on (e.g. only price drops above a
+threshold).
 
 Design goals: never raise into the monitor loop (a broken sink must not stop
 scraping), and stay dependency-light (httpx + stdlib smtplib).
@@ -10,6 +11,9 @@ scraping), and stay dependency-light (httpx + stdlib smtplib).
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
 import smtplib
 from email.mime.text import MIMEText
@@ -30,6 +34,14 @@ def configured_sinks() -> list[str]:
         sinks.append("webhook")
     if ALERTS.slack_webhook_url:
         sinks.append("slack")
+    if ALERTS.discord_webhook_url:
+        sinks.append("discord")
+    if ALERTS.teams_webhook_url:
+        sinks.append("teams")
+    if ALERTS.ntfy_url:
+        sinks.append("ntfy")
+    if ALERTS.telegram_bot_token and ALERTS.telegram_chat_id:
+        sinks.append("telegram")
     if ALERTS.email_to and ALERTS.smtp_host:
         sinks.append("email")
     if ALERTS.console:
@@ -42,6 +54,18 @@ def _post_json(url: str, payload: dict) -> None:
     """POST JSON with a few retries for transient network failures."""
     with httpx.Client(timeout=15) as client:
         client.post(url, json=payload).raise_for_status()
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, max=4), reraise=True)
+def _post_raw(url: str, content: str, headers: dict[str, str]) -> None:
+    """POST a raw body (used for signed webhooks and ntfy plain-text)."""
+    with httpx.Client(timeout=15) as client:
+        client.post(url, content=content.encode("utf-8"), headers=headers).raise_for_status()
+
+
+def describe(change: PriceChange) -> str:
+    """Public, human-readable one-line summary of a change (for history/alerts)."""
+    return _describe(change)
 
 _PRICE_FIELDS = {"price"}
 _BACK_IN_STOCK = {"in stock", "instock", "available", "in_stock"}
@@ -104,6 +128,10 @@ def notify(site_url: str, changes: list[PriceChange]) -> list[PriceChange]:
     }
     _safe(_send_webhook, payload)
     _safe(_send_slack, subject, lines)
+    _safe(_send_discord, subject, lines)
+    _safe(_send_teams, subject, lines)
+    _safe(_send_ntfy, subject, lines)
+    _safe(_send_telegram, subject, lines)
     _safe(_send_email, subject, body)
 
     return to_send
@@ -119,6 +147,10 @@ def send_message(subject: str, lines: list[str], payload_extra: dict | None = No
         payload.update(payload_extra)
     _safe(_send_webhook, payload)
     _safe(_send_slack, subject, lines)
+    _safe(_send_discord, subject, lines)
+    _safe(_send_teams, subject, lines)
+    _safe(_send_ntfy, subject, lines)
+    _safe(_send_telegram, subject, lines)
     _safe(_send_email, subject, body)
 
 
@@ -130,7 +162,33 @@ def send_message(subject: str, lines: list[str], payload_extra: dict | None = No
 def _send_webhook(payload: dict) -> None:
     if not ALERTS.webhook_url:
         return
-    _post_json(ALERTS.webhook_url, payload)
+    if ALERTS.webhook_secret:
+        # Sign the exact bytes we send so receivers can verify authenticity.
+        body = json.dumps(payload)
+        sig = hmac.new(
+            ALERTS.webhook_secret.encode("utf-8"), body.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
+        _post_raw(
+            ALERTS.webhook_url,
+            body,
+            {"Content-Type": "application/json", "X-Crawlr-Signature": f"sha256={sig}"},
+        )
+    else:
+        _post_json(ALERTS.webhook_url, payload)
+
+
+def _send_teams(subject: str, lines: list[str]) -> None:
+    if not ALERTS.teams_webhook_url:
+        return
+    text = f"**{subject}**\n\n" + "\n".join(f"- {line}" for line in lines)
+    _post_json(ALERTS.teams_webhook_url, {"text": text})
+
+
+def _send_ntfy(subject: str, lines: list[str]) -> None:
+    if not ALERTS.ntfy_url:
+        return
+    body = "\n".join(lines)
+    _post_raw(ALERTS.ntfy_url, body, {"Title": subject[:200], "Content-Type": "text/plain"})
 
 
 def _send_slack(subject: str, lines: list[str]) -> None:
@@ -138,6 +196,22 @@ def _send_slack(subject: str, lines: list[str]) -> None:
         return
     text = f"*{subject}*\n" + "\n".join(f"• {line}" for line in lines)
     _post_json(ALERTS.slack_webhook_url, {"text": text})
+
+
+def _send_discord(subject: str, lines: list[str]) -> None:
+    if not ALERTS.discord_webhook_url:
+        return
+    # Discord incoming webhooks accept a simple {"content": "..."} payload.
+    text = f"**{subject}**\n" + "\n".join(f"• {line}" for line in lines)
+    _post_json(ALERTS.discord_webhook_url, {"content": text[:1900]})
+
+
+def _send_telegram(subject: str, lines: list[str]) -> None:
+    if not (ALERTS.telegram_bot_token and ALERTS.telegram_chat_id):
+        return
+    text = f"{subject}\n" + "\n".join(f"• {line}" for line in lines)
+    url = f"https://api.telegram.org/bot{ALERTS.telegram_bot_token}/sendMessage"
+    _post_json(url, {"chat_id": ALERTS.telegram_chat_id, "text": text[:4000]})
 
 
 def _send_email(subject: str, body: str) -> None:
