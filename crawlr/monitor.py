@@ -21,6 +21,11 @@ from .models import ExtractionResult, ExtractionSchema, PriceChange
 SchemaResolver = Callable[[str], "ExtractionSchema | None"]
 
 
+def _dedup_key(site_id: int, change: PriceChange) -> str:
+    """Stable key for alert throttling/dedup per (site, item, field)."""
+    return f"{site_id}|{change.field}|{change.product_url or ''}"
+
+
 def _key_field(schema: ExtractionSchema) -> str | None:
     """Pick a stable per-item identity field for diffing (prefer url, then title)."""
     names = [f.name for f in schema.fields]
@@ -120,8 +125,22 @@ def run_once(
         if send_alerts and changes:
             # Only alert on changes matching the site's trigger / rules template.
             to_alert = triggers.filter_changes(site, changes)
+            # Throttle: skip changes we already alerted on within the window.
+            if config.ALERTS.throttle_minutes > 0:
+                to_alert = [
+                    c for c in to_alert
+                    if not storage.was_recently_alerted(
+                        _dedup_key(site_id, c), config.ALERTS.throttle_minutes
+                    )
+                ]
             if to_alert:
-                alerts.notify(site["url"], to_alert)
+                sent = alerts.notify(site["url"], to_alert)
+                sinks = [s for s in alerts.configured_sinks() if s != "console"]
+                for c in sent:
+                    storage.record_alert_event(
+                        site_id, c.product_url, c.field, alerts.describe(c),
+                        sinks, _dedup_key(site_id, c),
+                    )
 
     # Cap stored history per site when a retention window is configured. Runs
     # after diffing/recording so change detection always sees the prior run.

@@ -42,6 +42,17 @@ def _schema(name: str):
     return schema
 
 
+def _resolve_or_detect(name: str | None, url: str, force_js: bool = False):
+    """Return a schema, auto-detecting from the URL when the user omits --schema."""
+    if name:
+        return _schema(name)
+    from . import detect
+
+    detected = detect.detect_schema(url, force_js=force_js)
+    console.print(f"[dim]Auto-detected schema:[/dim] [green]{detected}[/green]")
+    return _schema(detected)
+
+
 def _mode_banner() -> None:
     mode = f"LLM: {LLM.provider} ({LLM.model or 'default'})" if LLM.enabled else "LLM: heuristic (offline)"
     console.print(f"[dim]{mode}[/dim]")
@@ -64,7 +75,7 @@ def _print_quality(result) -> None:
 @app.command()
 def scrape(
     url: str = typer.Argument(..., help="URL to scrape"),
-    schema: str = typer.Option("product", help="Schema name (see `crawlr schemas`)"),
+    schema: str = typer.Option(None, help="Schema name (omit to auto-detect; see `crawlr schemas`)"),
     js: bool = typer.Option(False, help="Force JS rendering (needs the 'js' extra)"),
     output: str = typer.Option("table", help="Output format: table | json"),
 ) -> None:
@@ -72,7 +83,7 @@ def scrape(
     from .extractor import scrape as do_scrape
 
     _mode_banner()
-    result = do_scrape(url, _schema(schema), force_js=js)
+    result = do_scrape(url, _resolve_or_detect(schema, url, js), force_js=js)
 
     for w in result.warnings:
         console.print(f"[yellow]! {w}[/yellow]")
@@ -88,16 +99,18 @@ def scrape(
 @app.command()
 def add(
     url: str = typer.Argument(..., help="URL to monitor"),
-    schema: str = typer.Option("product", help="Schema name (see `crawlr schemas`)"),
+    schema: str = typer.Option(None, help="Schema name (omit to auto-detect; see `crawlr schemas`)"),
     interval: int = typer.Option(60, help="Monitoring interval in minutes"),
 ) -> None:
     """Register a site for continuous monitoring."""
     storage.init_db()
-    _schema(schema)  # validate the schema name up front
+    resolved = _resolve_or_detect(schema, url)
     site_id = storage.add_site(
-        MonitoredSite(url=url, schema_name=schema, interval_minutes=interval)
+        MonitoredSite(url=url, schema_name=resolved.name, interval_minutes=interval)
     )
-    console.print(f"[green]Added site #{site_id}[/green] {url} (schema={schema}, every {interval}m)")
+    console.print(
+        f"[green]Added site #{site_id}[/green] {url} (schema={resolved.name}, every {interval}m)"
+    )
 
 
 @app.command()
@@ -109,11 +122,11 @@ def watch(
         None, help="Explicit trigger: any_change|price_drop|price_below|price_above|back_in_stock|out_of_stock"
     ),
     interval: int = typer.Option(60, help="Check interval in minutes"),
-    schema: str = typer.Option("product", help="Schema (defaults to product: price + stock)"),
+    schema: str = typer.Option(None, help="Schema (omit to auto-detect; defaults toward product)"),
 ) -> None:
     """Watch a product's price and stock (the easy way)."""
     storage.init_db()
-    _schema(schema)
+    resolved = _resolve_or_detect(schema, url)
 
     # Resolve the trigger from the friendly flags.
     if trigger:
@@ -128,7 +141,7 @@ def watch(
     site_id = storage.add_site(
         MonitoredSite(
             url=url,
-            schema_name=schema,
+            schema_name=resolved.name,
             interval_minutes=interval,
             trigger=chosen,
             target_price=target,
@@ -143,10 +156,13 @@ def watch(
 
 
 @app.command()
-def watchlist() -> None:
+def watchlist(as_json: bool = typer.Option(False, "--json", help="Output raw JSON")) -> None:
     """Show the price/stock watchlist."""
     storage.init_db()
     rows = storage.watchlist()
+    if as_json:
+        print(json.dumps(rows, indent=2, default=str))
+        return
     if not rows:
         console.print("[dim]Nothing watched yet. Add one with: crawlr watch <url>[/dim]")
         return
@@ -166,6 +182,68 @@ def watchlist() -> None:
 
 
 @app.command()
+def unwatch(site_id: int = typer.Argument(..., help="Site ID to remove (see `crawlr sites`)")) -> None:
+    """Delete a watch and all of its history."""
+    storage.init_db()
+    if storage.delete_site(site_id):
+        console.print(f"[green]Removed site #{site_id}.[/green]")
+    else:
+        console.print(f"[red]No site with id {site_id}.[/red]")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def pause(site_id: int = typer.Argument(..., help="Site ID to pause")) -> None:
+    """Pause monitoring for a site (keeps its history)."""
+    storage.init_db()
+    if storage.get_site(site_id) is None:
+        console.print(f"[red]No site with id {site_id}.[/red]")
+        raise typer.Exit(code=1)
+    storage.set_active(site_id, False)
+    console.print(f"[yellow]Paused site #{site_id}.[/yellow]")
+
+
+@app.command()
+def resume(site_id: int = typer.Argument(..., help="Site ID to resume")) -> None:
+    """Resume monitoring for a paused site."""
+    storage.init_db()
+    if storage.get_site(site_id) is None:
+        console.print(f"[red]No site with id {site_id}.[/red]")
+        raise typer.Exit(code=1)
+    storage.set_active(site_id, True)
+    console.print(f"[green]Resumed site #{site_id}.[/green]")
+
+
+@app.command()
+def compare(
+    urls: list[str] = typer.Argument(..., help="Two or more URLs to compare"),
+    schema: str = typer.Option(None, help="Schema (omit to auto-detect each URL)"),
+    js: bool = typer.Option(False, help="Force JS rendering"),
+) -> None:
+    """One-shot price comparison across several URLs for the same product."""
+    from .extractor import scrape as do_scrape
+
+    _mode_banner()
+    table = Table("URL", "Title", "Price", "Stock", "Confidence", title="Price comparison")
+    priced: list[tuple[str, float]] = []
+    for url in urls:
+        result = do_scrape(url, _resolve_or_detect(schema, url, js), force_js=js)
+        rec = result.records[0] if result.records else {}
+        price = rec.get("price")
+        if isinstance(price, (int, float)):
+            priced.append((url, float(price)))
+        table.add_row(
+            _fmt(url), _fmt(rec.get("title")), _price(price),
+            _stock(triggers.is_in_stock(rec.get("availability"))),
+            f"{result.confidence:.0%}",
+        )
+    console.print(table)
+    if len(priced) >= 2:
+        url, price = min(priced, key=lambda x: x[1])
+        console.print(f"[green]Cheapest:[/green] {url} at {price:g}")
+
+
+@app.command()
 def init(force: bool = typer.Option(False, help="Overwrite an existing rules file")) -> None:
     """Create a starter rules template (crawlr.rules.yaml)."""
     written, message = triggers.write_template(overwrite=force)
@@ -177,10 +255,13 @@ def init(force: bool = typer.Option(False, help="Overwrite an existing rules fil
 
 
 @app.command()
-def sites() -> None:
+def sites(as_json: bool = typer.Option(False, "--json", help="Output raw JSON")) -> None:
     """List monitored sites."""
     storage.init_db()
     rows = storage.list_sites()
+    if as_json:
+        print(json.dumps(rows, indent=2, default=str))
+        return
     if not rows:
         console.print("[dim]No sites yet. Add one with: crawlr add <url>[/dim]")
         return
@@ -263,10 +344,14 @@ def monitor(
 def changes(
     site_id: int = typer.Option(None, help="Filter by site ID"),
     limit: int = typer.Option(20, help="Max rows"),
+    as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
 ) -> None:
     """Show recent detected changes."""
     storage.init_db()
     rows = storage.recent_changes(site_id, limit)
+    if as_json:
+        print(json.dumps(rows, indent=2, default=str))
+        return
     if not rows:
         console.print("[dim]No changes recorded yet.[/dim]")
         return
@@ -320,10 +405,13 @@ def digest(
 
 
 @app.command()
-def stats() -> None:
+def stats(as_json: bool = typer.Option(False, "--json", help="Output raw JSON")) -> None:
     """Show per-site health: runs, average confidence, self-heals."""
     storage.init_db()
     rows = storage.site_stats()
+    if as_json:
+        print(json.dumps(rows, indent=2, default=str))
+        return
     if not rows:
         console.print("[dim]No sites yet.[/dim]")
         return

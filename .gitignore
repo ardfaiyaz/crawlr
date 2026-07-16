@@ -26,3 +26,7 @@ coverage.xml
 
 # OS
 .DS_Store
+
+# Agent / tooling scratch dirs
+.agents/
+.kiro/

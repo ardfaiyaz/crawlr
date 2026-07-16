@@ -86,6 +86,75 @@ def set_active(site_id: int, active: bool) -> None:
         conn.execute(db.q("UPDATE sites SET active=? WHERE id=?"), (int(active), site_id))
 
 
+def delete_site(site_id: int) -> bool:
+    """Remove a site and all of its runs, records, and change history."""
+    with db.connect() as conn:
+        exists = conn.execute(
+            db.q("SELECT 1 FROM sites WHERE id=?"), (site_id,)
+        ).fetchone()
+        if not exists:
+            return False
+        conn.execute(db.q("DELETE FROM records WHERE site_id=?"), (site_id,))
+        conn.execute(db.q("DELETE FROM runs WHERE site_id=?"), (site_id,))
+        conn.execute(db.q("DELETE FROM changes WHERE site_id=?"), (site_id,))
+        conn.execute(db.q("DELETE FROM alert_events WHERE site_id=?"), (site_id,))
+        conn.execute(db.q("DELETE FROM sites WHERE id=?"), (site_id,))
+        return True
+
+
+def record_alert_event(
+    site_id: int | None,
+    item_key: str | None,
+    field: str | None,
+    message: str,
+    sinks: list[str] | None,
+    dedup_key: str | None,
+) -> None:
+    """Persist a dispatched alert so it appears in history and throttling works."""
+    with db.connect() as conn:
+        conn.execute(
+            db.q(
+                "INSERT INTO alert_events "
+                "(site_id, item_key, field, message, sinks, dedup_key, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)"
+            ),
+            (site_id, item_key, field, message, ",".join(sinks or []), dedup_key, _now_iso()),
+        )
+
+
+def was_recently_alerted(dedup_key: str | None, within_minutes: int) -> bool:
+    """True if an alert with the same dedup key fired inside the throttle window."""
+    if within_minutes <= 0 or not dedup_key:
+        return False
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=within_minutes)).isoformat()
+    with db.connect() as conn:
+        row = conn.execute(
+            db.q("SELECT 1 FROM alert_events WHERE dedup_key=? AND created_at>=? LIMIT 1"),
+            (dedup_key, cutoff),
+        ).fetchone()
+    return row is not None
+
+
+def recent_alert_events(site_id: int | None = None, limit: int = 25) -> list[dict]:
+    """Most recent dispatched alerts, newest first (optionally per site)."""
+    limit = min(max(limit, 1), 500)
+    with db.connect() as conn:
+        if site_id is None:
+            rows = conn.execute(
+                db.q("SELECT * FROM alert_events ORDER BY created_at DESC LIMIT ?"), (limit,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                db.q(
+                    "SELECT * FROM alert_events WHERE site_id=? ORDER BY created_at DESC LIMIT ?"
+                ),
+                (site_id, limit),
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # Runs + records
 # ---------------------------------------------------------------------------
@@ -228,22 +297,53 @@ def recent_changes(site_id: int | None = None, limit: int = 50) -> list[dict]:
         return [dict(r) for r in conn.execute(db.q(query), params).fetchall()]
 
 
-def price_history(site_id: int, item_key: str, field: str = "price") -> list[dict]:
-    """Time series of a field for one item, useful for charts."""
+def price_history(site_id: int, item_key: str | None = None, field: str = "price") -> list[dict]:
+    """Time series of a field for one item, useful for charts.
+
+    ``item_key`` is ``None`` for single-product pages (one record per run); in
+    that case we return the field across every run for the site.
+    """
     with db.connect() as conn:
-        rows = conn.execute(
-            db.q(
-                "SELECT data_json, fetched_at FROM records WHERE site_id=? AND item_key=? "
-                "ORDER BY fetched_at ASC"
-            ),
-            (site_id, item_key),
-        ).fetchall()
+        if item_key is None:
+            rows = conn.execute(
+                db.q(
+                    "SELECT data_json, fetched_at FROM records WHERE site_id=? "
+                    "AND item_key IS NULL ORDER BY fetched_at ASC"
+                ),
+                (site_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                db.q(
+                    "SELECT data_json, fetched_at FROM records WHERE site_id=? AND item_key=? "
+                    "ORDER BY fetched_at ASC"
+                ),
+                (site_id, item_key),
+            ).fetchall()
     series = []
     for r in rows:
         data = json.loads(r["data_json"])
         if field in data:
             series.append({"at": r["fetched_at"], "value": data[field]})
     return series
+
+
+def all_price_points(field: str = "price") -> dict[tuple[int, str | None], list[float]]:
+    """Numeric time-series for every (site, item), built in a single query.
+
+    Used by the dashboard to render sparklines for all watched rows without
+    issuing a query per row (avoids an N+1 pattern as the watchlist grows).
+    """
+    with db.connect() as conn:
+        rows = conn.execute(
+            db.q("SELECT site_id, item_key, data_json FROM records ORDER BY fetched_at ASC")
+        ).fetchall()
+    out: dict[tuple[int, str | None], list[float]] = {}
+    for r in rows:
+        value = json.loads(r["data_json"]).get(field)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            out.setdefault((r["site_id"], r["item_key"]), []).append(float(value))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +381,7 @@ def watchlist() -> list[dict]:
                 "active": site["active"],
                 "alert_trigger": trigger,
                 "target_price": target,
+                "item_key": current.get("item_key"),
                 "title": current.get("title") or current.get("item_key"),
                 "price": price,
                 "prev_price": prev_price,

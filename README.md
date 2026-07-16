@@ -30,7 +30,8 @@ monitoring never silently dies.
 
 - **Runs free & offline** — no API key required; add an OpenAI/Anthropic key for higher accuracy.
 - **Self-healing** — survives redesigns that break traditional scrapers.
-- **Price & stock alerts** — via webhook, Slack, or email, on the trigger you choose.
+- **Zero-config** — `crawlr watch <url>` auto-detects the right schema (product, jobs, real estate, news).
+- **Price & stock alerts** — webhook (signed), Slack, Discord, Teams, Telegram, ntfy, or email, with throttling.
 - **General-purpose** — e-commerce ships in; add new verticals as simple YAML.
 
 ## Install
@@ -42,11 +43,29 @@ pipx install crawlr        # or: pip install crawlr
 ## Quickstart
 
 ```bash
-crawlr watch "https://store.com/product/123" --target 25   # track price + stock
+crawlr watch "https://store.com/product/123" --target 25   # schema auto-detected
 crawlr watchlist                                           # current price, movement, stock
 crawlr monitor --daemon                                    # keep checking in the background
 crawlr serve                                               # optional local dashboard
 ```
+
+Omit `--schema` and Crawlr detects the page type for you (product, product list, jobs,
+real estate, news). Pass `--schema <name>` to override.
+
+## Deploy with Docker
+
+```bash
+docker run -p 8000:8000 -v crawlr-data:/data ghcr.io/ardfaiyaz/crawlr   # dashboard on :8000
+```
+
+Or run the dashboard **and** a background monitor together:
+
+```bash
+docker compose up -d      # then open http://localhost:8000
+```
+
+Build locally with `docker build -t crawlr .`. Data (SQLite DB, selector cache,
+snapshots) persists in the `/data` volume.
 
 ## Alert triggers
 
@@ -72,6 +91,32 @@ rules:
     action: alert
   - when: back_in_stock
     action: alert
+```
+
+## Recipes
+
+```bash
+# Track a competitor's price, alert on a 10%+ drop, check hourly
+crawlr watch "https://store.com/p/123" --trigger price_drop --interval 60
+
+# Get pinged when something is back in stock
+crawlr watch "https://store.com/p/123" --restock
+
+# Compare the same product across three shops
+crawlr compare "https://a.com/p" "https://b.com/p" "https://c.com/p"
+
+# Monitor a job board (schema auto-detected)
+crawlr watch "https://boards.example/jobs" --interval 720
+
+# Free phone alerts via ntfy.sh
+export CRAWLR_ALERT_NTFY="https://ntfy.sh/my-crawlr-alerts"
+crawlr monitor --daemon
+
+# Pause / resume / remove a watch
+crawlr pause 3 && crawlr resume 3 && crawlr unwatch 3
+
+# Pipe machine-readable output into other tools
+crawlr watchlist --json | jq '.[] | {title, price}'
 ```
 
 ## Custom schemas (no code)
@@ -104,6 +149,13 @@ Set via environment variables or a `.env` file:
 | `CRAWLR_DATABASE_URL` | — | `postgresql://...` to use Postgres instead of SQLite |
 | `CRAWLR_ALERT_WEBHOOK` | — | Webhook URL for change alerts |
 | `CRAWLR_ALERT_SLACK` | — | Slack incoming-webhook URL |
+| `CRAWLR_ALERT_DISCORD` | — | Discord incoming-webhook URL |
+| `CRAWLR_ALERT_TEAMS` | — | Microsoft Teams incoming-webhook URL |
+| `CRAWLR_ALERT_NTFY` | — | ntfy.sh (or self-hosted) topic URL |
+| `CRAWLR_ALERT_TELEGRAM_TOKEN` | — | Telegram bot token (from @BotFather) |
+| `CRAWLR_ALERT_TELEGRAM_CHAT_ID` | — | Telegram chat id to send alerts to |
+| `CRAWLR_WEBHOOK_SECRET` | — | HMAC-signs generic webhook payloads |
+| `CRAWLR_ALERT_THROTTLE_MINUTES` | `0` | Suppress repeat alerts within N minutes |
 | `CRAWLR_PROXIES` | — | Comma-separated proxy URLs to rotate |
 | `CRAWLR_RESPECT_ROBOTS` | `true` | Honor robots.txt |
 
