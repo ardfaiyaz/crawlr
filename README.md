@@ -30,7 +30,8 @@ monitoring never silently dies.
 
 - **Runs free & offline** — no API key required; add an OpenAI/Anthropic key for higher accuracy.
 - **Self-healing** — survives redesigns that break traditional scrapers.
-- **Price & stock alerts** — via webhook, Slack, or email, on the trigger you choose.
+- **Zero-config** — `crawlr watch <url>` auto-detects the right schema (product, jobs, real estate, news).
+- **Price & stock alerts** — via webhook, Slack, Discord, Telegram, or email, on the trigger you choose.
 - **General-purpose** — e-commerce ships in; add new verticals as simple YAML.
 
 ## Install
@@ -42,11 +43,29 @@ pipx install crawlr        # or: pip install crawlr
 ## Quickstart
 
 ```bash
-crawlr watch "https://store.com/product/123" --target 25   # track price + stock
+crawlr watch "https://store.com/product/123" --target 25   # schema auto-detected
 crawlr watchlist                                           # current price, movement, stock
 crawlr monitor --daemon                                    # keep checking in the background
 crawlr serve                                               # optional local dashboard
 ```
+
+Omit `--schema` and Crawlr detects the page type for you (product, product list, jobs,
+real estate, news). Pass `--schema <name>` to override.
+
+## Deploy with Docker
+
+```bash
+docker run -p 8000:8000 -v crawlr-data:/data ghcr.io/ardfaiyaz/crawlr   # dashboard on :8000
+```
+
+Or run the dashboard **and** a background monitor together:
+
+```bash
+docker compose up -d      # then open http://localhost:8000
+```
+
+Build locally with `docker build -t crawlr .`. Data (SQLite DB, selector cache,
+snapshots) persists in the `/data` volume.
 
 ## Alert triggers
 
@@ -104,6 +123,9 @@ Set via environment variables or a `.env` file:
 | `CRAWLR_DATABASE_URL` | — | `postgresql://...` to use Postgres instead of SQLite |
 | `CRAWLR_ALERT_WEBHOOK` | — | Webhook URL for change alerts |
 | `CRAWLR_ALERT_SLACK` | — | Slack incoming-webhook URL |
+| `CRAWLR_ALERT_DISCORD` | — | Discord incoming-webhook URL |
+| `CRAWLR_ALERT_TELEGRAM_TOKEN` | — | Telegram bot token (from @BotFather) |
+| `CRAWLR_ALERT_TELEGRAM_CHAT_ID` | — | Telegram chat id to send alerts to |
 | `CRAWLR_PROXIES` | — | Comma-separated proxy URLs to rotate |
 | `CRAWLR_RESPECT_ROBOTS` | `true` | Honor robots.txt |
 

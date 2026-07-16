@@ -42,6 +42,17 @@ def _schema(name: str):
     return schema
 
 
+def _resolve_or_detect(name: str | None, url: str, force_js: bool = False):
+    """Return a schema, auto-detecting from the URL when the user omits --schema."""
+    if name:
+        return _schema(name)
+    from . import detect
+
+    detected = detect.detect_schema(url, force_js=force_js)
+    console.print(f"[dim]Auto-detected schema:[/dim] [green]{detected}[/green]")
+    return _schema(detected)
+
+
 def _mode_banner() -> None:
     mode = f"LLM: {LLM.provider} ({LLM.model or 'default'})" if LLM.enabled else "LLM: heuristic (offline)"
     console.print(f"[dim]{mode}[/dim]")
@@ -64,7 +75,7 @@ def _print_quality(result) -> None:
 @app.command()
 def scrape(
     url: str = typer.Argument(..., help="URL to scrape"),
-    schema: str = typer.Option("product", help="Schema name (see `crawlr schemas`)"),
+    schema: str = typer.Option(None, help="Schema name (omit to auto-detect; see `crawlr schemas`)"),
     js: bool = typer.Option(False, help="Force JS rendering (needs the 'js' extra)"),
     output: str = typer.Option("table", help="Output format: table | json"),
 ) -> None:
@@ -72,7 +83,7 @@ def scrape(
     from .extractor import scrape as do_scrape
 
     _mode_banner()
-    result = do_scrape(url, _schema(schema), force_js=js)
+    result = do_scrape(url, _resolve_or_detect(schema, url, js), force_js=js)
 
     for w in result.warnings:
         console.print(f"[yellow]! {w}[/yellow]")
@@ -88,16 +99,18 @@ def scrape(
 @app.command()
 def add(
     url: str = typer.Argument(..., help="URL to monitor"),
-    schema: str = typer.Option("product", help="Schema name (see `crawlr schemas`)"),
+    schema: str = typer.Option(None, help="Schema name (omit to auto-detect; see `crawlr schemas`)"),
     interval: int = typer.Option(60, help="Monitoring interval in minutes"),
 ) -> None:
     """Register a site for continuous monitoring."""
     storage.init_db()
-    _schema(schema)  # validate the schema name up front
+    resolved = _resolve_or_detect(schema, url)
     site_id = storage.add_site(
-        MonitoredSite(url=url, schema_name=schema, interval_minutes=interval)
+        MonitoredSite(url=url, schema_name=resolved.name, interval_minutes=interval)
     )
-    console.print(f"[green]Added site #{site_id}[/green] {url} (schema={schema}, every {interval}m)")
+    console.print(
+        f"[green]Added site #{site_id}[/green] {url} (schema={resolved.name}, every {interval}m)"
+    )
 
 
 @app.command()
@@ -109,11 +122,11 @@ def watch(
         None, help="Explicit trigger: any_change|price_drop|price_below|price_above|back_in_stock|out_of_stock"
     ),
     interval: int = typer.Option(60, help="Check interval in minutes"),
-    schema: str = typer.Option("product", help="Schema (defaults to product: price + stock)"),
+    schema: str = typer.Option(None, help="Schema (omit to auto-detect; defaults toward product)"),
 ) -> None:
     """Watch a product's price and stock (the easy way)."""
     storage.init_db()
-    _schema(schema)
+    resolved = _resolve_or_detect(schema, url)
 
     # Resolve the trigger from the friendly flags.
     if trigger:
@@ -128,7 +141,7 @@ def watch(
     site_id = storage.add_site(
         MonitoredSite(
             url=url,
-            schema_name=schema,
+            schema_name=resolved.name,
             interval_minutes=interval,
             trigger=chosen,
             target_price=target,

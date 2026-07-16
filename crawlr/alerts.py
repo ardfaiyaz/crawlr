@@ -1,8 +1,9 @@
 """Alerting: notify external sinks when monitored data changes (roadmap item 1).
 
 Sinks (all optional, configured via env): console/log, generic webhook, Slack
-incoming webhook, and email (SMTP). A simple rule layer decides which changes
-are worth alerting on (e.g. only price drops above a threshold).
+incoming webhook, Discord webhook, Telegram bot, and email (SMTP). A simple rule
+layer decides which changes are worth alerting on (e.g. only price drops above a
+threshold).
 
 Design goals: never raise into the monitor loop (a broken sink must not stop
 scraping), and stay dependency-light (httpx + stdlib smtplib).
@@ -30,6 +31,10 @@ def configured_sinks() -> list[str]:
         sinks.append("webhook")
     if ALERTS.slack_webhook_url:
         sinks.append("slack")
+    if ALERTS.discord_webhook_url:
+        sinks.append("discord")
+    if ALERTS.telegram_bot_token and ALERTS.telegram_chat_id:
+        sinks.append("telegram")
     if ALERTS.email_to and ALERTS.smtp_host:
         sinks.append("email")
     if ALERTS.console:
@@ -104,6 +109,8 @@ def notify(site_url: str, changes: list[PriceChange]) -> list[PriceChange]:
     }
     _safe(_send_webhook, payload)
     _safe(_send_slack, subject, lines)
+    _safe(_send_discord, subject, lines)
+    _safe(_send_telegram, subject, lines)
     _safe(_send_email, subject, body)
 
     return to_send
@@ -119,6 +126,8 @@ def send_message(subject: str, lines: list[str], payload_extra: dict | None = No
         payload.update(payload_extra)
     _safe(_send_webhook, payload)
     _safe(_send_slack, subject, lines)
+    _safe(_send_discord, subject, lines)
+    _safe(_send_telegram, subject, lines)
     _safe(_send_email, subject, body)
 
 
@@ -138,6 +147,22 @@ def _send_slack(subject: str, lines: list[str]) -> None:
         return
     text = f"*{subject}*\n" + "\n".join(f"• {line}" for line in lines)
     _post_json(ALERTS.slack_webhook_url, {"text": text})
+
+
+def _send_discord(subject: str, lines: list[str]) -> None:
+    if not ALERTS.discord_webhook_url:
+        return
+    # Discord incoming webhooks accept a simple {"content": "..."} payload.
+    text = f"**{subject}**\n" + "\n".join(f"• {line}" for line in lines)
+    _post_json(ALERTS.discord_webhook_url, {"content": text[:1900]})
+
+
+def _send_telegram(subject: str, lines: list[str]) -> None:
+    if not (ALERTS.telegram_bot_token and ALERTS.telegram_chat_id):
+        return
+    text = f"{subject}\n" + "\n".join(f"• {line}" for line in lines)
+    url = f"https://api.telegram.org/bot{ALERTS.telegram_bot_token}/sendMessage"
+    _post_json(url, {"chat_id": ALERTS.telegram_chat_id, "text": text[:4000]})
 
 
 def _send_email(subject: str, body: str) -> None:

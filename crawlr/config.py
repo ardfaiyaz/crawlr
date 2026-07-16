@@ -112,6 +112,11 @@ class AlertConfig:
 
     webhook_url: str | None = os.getenv("CRAWLR_ALERT_WEBHOOK") or None
     slack_webhook_url: str | None = os.getenv("CRAWLR_ALERT_SLACK") or None
+    discord_webhook_url: str | None = os.getenv("CRAWLR_ALERT_DISCORD") or None
+    # Telegram bot alerts: create a bot via @BotFather, then set the token and
+    # your chat id (get it from @userinfobot). Free push notifications to phone.
+    telegram_bot_token: str | None = os.getenv("CRAWLR_ALERT_TELEGRAM_TOKEN") or None
+    telegram_chat_id: str | None = os.getenv("CRAWLR_ALERT_TELEGRAM_CHAT_ID") or None
     email_to: list[str] = field(
         default_factory=lambda: _split_csv(os.getenv("CRAWLR_ALERT_EMAIL_TO", ""))
     )
