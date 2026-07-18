@@ -80,6 +80,10 @@ class ExtractionResult(BaseModel):
     confidence: float = 1.0
     # Per-field confidence (0..1) from structured-data vs selector consensus.
     field_confidence: dict = Field(default_factory=dict)
+    # Per-field provenance: "structured" | "selector" | "both" | "none".
+    field_source: dict = Field(default_factory=dict)
+    # Overall data-quality label: verified | high | inferred | low.
+    quality: str = "unknown"
     # False when any record fails schema validation.
     valid: bool = True
 
@@ -96,9 +100,16 @@ class ExtractionResult(BaseModel):
 class Product(BaseModel):
     title: str | None = None
     price: float | None = None
+    original_price: float | None = None
+    discount_pct: float | None = None
     currency: str | None = None
     availability: str | None = None
     rating: float | None = None
+    review_count: float | None = None
+    brand: str | None = None
+    sku: str | None = None
+    gtin: str | None = None
+    mpn: str | None = None
     image: str | None = None
     url: str | None = None
 

@@ -4,8 +4,9 @@ Many stores embed exact product data as schema.org JSON-LD, microdata, or
 OpenGraph tags. Reading that is far more accurate and redesign-proof than CSS
 selectors, so Crawlr consults it first and cross-checks it against selectors.
 
-`extract_structured(html)` returns any of these canonical fields it can find:
-    title, price, currency, availability, rating, image, url
+`extract_structured(html)` returns any of these fields it can find:
+    title, price, original_price, currency, availability, rating, review_count,
+    brand, sku, gtin, mpn, image, url
 """
 
 from __future__ import annotations
@@ -16,7 +17,10 @@ from selectolax.parser import HTMLParser
 
 from . import normalize
 
-_CANONICAL = ("title", "price", "currency", "availability", "rating", "image", "url")
+_CANONICAL = (
+    "title", "price", "original_price", "currency", "availability", "rating",
+    "review_count", "brand", "sku", "gtin", "mpn", "image", "url",
+)
 
 
 def extract_structured(html: str) -> dict:
@@ -36,6 +40,14 @@ def _availability_text(value) -> str | None:
     low = v.lower()
     if "outofstock" in low or "out of stock" in low or "soldout" in low:
         return "Out of stock"
+    if "discontinued" in low:
+        return "Discontinued"
+    if "preorder" in low or "pre-order" in low:
+        return "Pre-order"
+    if "backorder" in low or "back order" in low:
+        return "Backorder"
+    if "limitedavailability" in low:
+        return "Limited availability"
     if "instock" in low or "in stock" in low or "onlineonly" in low:
         return "In stock"
     return v
@@ -52,6 +64,21 @@ def _image_url(value):
     if isinstance(value, dict):
         return value.get("url")
     return value
+
+
+def _as_str(value) -> str | None:
+    """Coerce a scalar to a clean string; ignore dicts/lists/empties."""
+    if value in (None, "") or isinstance(value, (dict, list)):
+        return None
+    return str(value).strip() or None
+
+
+def _brand_name(value) -> str | None:
+    """Brand can be a bare string or an Organization/Brand object."""
+    value = _first(value)
+    if isinstance(value, dict):
+        return _as_str(value.get("name"))
+    return _as_str(value)
 
 
 # ---------------------------------------------------------------------------
@@ -86,19 +113,36 @@ def _from_jsonld(tree: HTMLParser) -> dict:
             is_product = any("product" in str(t).lower() for t in types)
             if not (is_product or "offers" in node):
                 continue
-            _fill(out, "title", node.get("name"))
+            _fill(out, "title", _as_str(node.get("name")))
             _fill(out, "image", _image_url(node.get("image")))
-            _fill(out, "url", node.get("url"))
+            _fill(out, "url", _as_str(node.get("url")))
+            _fill(out, "brand", _brand_name(node.get("brand")))
+            _fill(out, "sku", _as_str(node.get("sku")))
+            _fill(out, "mpn", _as_str(node.get("mpn")))
+            _fill(out, "gtin", _as_str(
+                node.get("gtin") or node.get("gtin13") or node.get("gtin12") or node.get("gtin8")
+            ))
             rating = node.get("aggregateRating")
             if isinstance(rating, dict):
                 _fill(out, "rating", normalize.normalize_number(rating.get("ratingValue")))
+                _fill(out, "review_count", normalize.normalize_number(
+                    rating.get("reviewCount") or rating.get("ratingCount")
+                ))
             offer = _first(node.get("offers"))
             if isinstance(offer, dict):
-                price = offer.get("price")
-                if price is None and isinstance(offer.get("priceSpecification"), dict):
-                    price = offer["priceSpecification"].get("price")
+                price = offer.get("price") or offer.get("lowPrice")
+                spec = offer.get("priceSpecification")
+                if price is None and isinstance(spec, dict):
+                    price = spec.get("price")
                 _fill(out, "price", normalize.normalize_number(price))
-                _fill(out, "currency", offer.get("priceCurrency"))
+                # AggregateOffer highPrice (or an explicit list price) = "was" price.
+                _fill(out, "original_price", normalize.normalize_number(
+                    offer.get("highPrice") or offer.get("listPrice")
+                ))
+                _fill(out, "currency", _as_str(
+                    offer.get("priceCurrency")
+                    or (spec.get("priceCurrency") if isinstance(spec, dict) else None)
+                ))
                 _fill(out, "availability", _availability_text(offer.get("availability")))
     return out
 
@@ -130,6 +174,9 @@ def _from_microdata(tree: HTMLParser) -> dict:
     _fill(out, "currency", _prop(scope, "priceCurrency"))
     _fill(out, "availability", _availability_text(_prop(scope, "availability")))
     _fill(out, "rating", normalize.normalize_number(_prop(scope, "ratingValue")))
+    _fill(out, "review_count", normalize.normalize_number(_prop(scope, "reviewCount")))
+    _fill(out, "brand", _prop(scope, "brand"))
+    _fill(out, "sku", _prop(scope, "sku"))
     _fill(out, "image", _prop(scope, "image"))
     return out
 
@@ -158,6 +205,7 @@ def _from_opengraph(tree: HTMLParser) -> dict:
         _meta(tree, ("product:price:amount", "og:price:amount"))
     ))
     _fill(out, "currency", _meta(tree, ("product:price:currency", "og:price:currency")))
+    _fill(out, "brand", _meta(tree, ("product:brand", "og:brand")))
     _fill(out, "availability", _availability_text(
         _meta(tree, ("product:availability", "og:availability"))
     ))

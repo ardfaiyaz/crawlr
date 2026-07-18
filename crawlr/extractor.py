@@ -92,9 +92,21 @@ def _finalize(
     if records and html and not schema.item_selector:
         data = structured.extract_structured(html)
         if data:
-            merged, field_conf = _consense(records[0], data, schema)
+            merged, field_conf, field_src = _consense(records[0], data, schema)
+            # Merge reliable structured-only extras (brand, sku, currency, ...)
+            # that the schema doesn't explicitly ask for, so records are richer
+            # without letting brittle heuristic selectors pollute them.
+            for key in _EXTRA_FIELDS:
+                val = data.get(key)
+                if val not in (None, "") and merged.get(key) in (None, ""):
+                    merged[key] = val
+                    field_src.setdefault(key, "structured")
+            disc = normalize.compute_discount(merged.get("original_price"), merged.get("price"))
+            if disc is not None:
+                merged["discount_pct"] = disc
             records = [merged, *records[1:]]
             result.field_confidence = field_conf
+            result.field_source = field_src
             if any(v == 0.5 for v in field_conf.values()):
                 result.warnings.append("Structured data disagreed with selectors on a field.")
 
@@ -107,6 +119,8 @@ def _finalize(
     else:
         result.confidence = confidence_score(records, schema)
 
+    result.quality = _quality_label(result.confidence, result.field_source)
+
     valid, errors = validate_records(records, schema)
     result.valid = valid
     if errors:
@@ -114,23 +128,56 @@ def _finalize(
     return result
 
 
+def _quality_label(confidence: float, field_source: dict) -> str:
+    """Human-readable trust label for a run's data."""
+    structured_backed = any(s in ("structured", "both") for s in field_source.values())
+    if confidence >= 0.85:
+        return "verified" if structured_backed else "high"
+    if confidence >= 0.5:
+        return "inferred"
+    return "low"
+
+
 # ---------------------------------------------------------------------------
 # Consensus: structured data vs selectors -> merged values + field confidence
 # ---------------------------------------------------------------------------
 
 # Canonical fields that structured data can provide.
-_CANONICAL = {"title", "price", "currency", "availability", "rating", "image", "url"}
+_CANONICAL = {
+    "title", "price", "original_price", "currency", "availability", "rating",
+    "review_count", "brand", "sku", "gtin", "mpn", "image", "url",
+}
+
+# Rich structured-only fields merged into single-product records even when the
+# schema doesn't list them (always sourced from structured data, never guessed).
+_EXTRA_FIELDS = {
+    "original_price", "currency", "brand", "sku", "gtin", "mpn", "review_count",
+}
 
 
-def _consense(record: dict, data: dict, schema: ExtractionSchema) -> tuple[dict, dict]:
+def _consense(record: dict, data: dict, schema: ExtractionSchema) -> tuple[dict, dict, dict]:
     merged = dict(record)
     field_conf: dict = {}
+    field_src: dict = {}
     for field in schema.fields:
         sel = record.get(field.name)
         struct = data.get(field.name) if field.name in _CANONICAL else None
         merged[field.name] = _choose(field, sel, struct)
         field_conf[field.name] = _field_confidence(sel, struct, field.type)
-    return merged, field_conf
+        field_src[field.name] = _source(sel, struct)
+    return merged, field_conf, field_src
+
+
+def _source(sel, struct) -> str:
+    sel_present = sel not in (None, "")
+    struct_present = struct not in (None, "")
+    if sel_present and struct_present:
+        return "both"
+    if struct_present:
+        return "structured"
+    if sel_present:
+        return "selector"
+    return "none"
 
 
 def _values_agree(a, b, ftype: FieldType) -> bool:

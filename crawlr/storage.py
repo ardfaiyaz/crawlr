@@ -346,6 +346,34 @@ def all_price_points(field: str = "price") -> dict[tuple[int, str | None], list[
     return out
 
 
+def _stats_from(values: list[float]) -> dict:
+    """Compute price-history analytics from a numeric series (newest last)."""
+    if not values:
+        return {
+            "count": 0, "low": None, "high": None, "avg": None,
+            "current": None, "pct_vs_avg": None, "is_all_time_low": False,
+        }
+    low, high = min(values), max(values)
+    avg = round(sum(values) / len(values), 2)
+    current = values[-1]
+    pct_vs_avg = round((current - avg) / avg * 100, 1) if avg else None
+    return {
+        "count": len(values), "low": low, "high": high, "avg": avg,
+        "current": current, "pct_vs_avg": pct_vs_avg,
+        "is_all_time_low": current <= low,
+    }
+
+
+def price_insights(site_id: int, item_key: str | None = None, field: str = "price") -> dict:
+    """All-time low/high/avg + current-vs-average for one item's price history."""
+    series = price_history(site_id, item_key, field)
+    values = [
+        p["value"] for p in series
+        if isinstance(p["value"], (int, float)) and not isinstance(p["value"], bool)
+    ]
+    return _stats_from(values)
+
+
 # ---------------------------------------------------------------------------
 # Watchlist (the simple, price/stock-focused view)
 # ---------------------------------------------------------------------------
@@ -354,6 +382,7 @@ def all_price_points(field: str = "price") -> dict[tuple[int, str | None], list[
 def watchlist() -> list[dict]:
     """Assemble one enriched row per site: current price, movement, stock, status."""
     rows: list[dict] = []
+    series_map = all_price_points("price")  # one query for every site's history
     for site in list_sites():
         sid = site["id"]
         latest = latest_records(sid)
@@ -372,6 +401,8 @@ def watchlist() -> list[dict]:
         if isinstance(price, (int, float)) and isinstance(prev_price, (int, float)) and prev_price:
             change_pct = round((price - prev_price) / prev_price * 100, 1)
 
+        stats = _stats_from(series_map.get((sid, current.get("item_key")), []))
+
         rows.append(
             {
                 "id": sid,
@@ -386,8 +417,15 @@ def watchlist() -> list[dict]:
                 "price": price,
                 "prev_price": prev_price,
                 "change_pct": change_pct,
+                "currency": current.get("currency"),
+                "discount_pct": current.get("discount_pct"),
                 "availability": current.get("availability"),
                 "in_stock": in_stock,
+                "low": stats["low"],
+                "high": stats["high"],
+                "avg": stats["avg"],
+                "pct_vs_avg": stats["pct_vs_avg"],
+                "is_all_time_low": stats["is_all_time_low"],
                 "confidence": run["confidence"] if run else None,
                 "last_checked": run["fetched_at"] if run else None,
                 "status": triggers.watch_status(price, in_stock, prev_price, trigger, target),

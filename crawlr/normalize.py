@@ -78,6 +78,19 @@ def normalize_price(text) -> tuple[float | None, str | None]:
     return normalize_number(text), parse_currency(text)
 
 
+def compute_discount(original, current) -> float | None:
+    """Percent off (0..100) given an original/list price and current price.
+
+    Returns None when either value is missing/invalid or there's no real
+    discount (current >= original), so we never surface a bogus "0% off".
+    """
+    o = normalize_number(original)
+    c = normalize_number(current)
+    if o is None or c is None or o <= 0 or c >= o:
+        return None
+    return round((o - c) / o * 100, 1)
+
+
 _IN_STOCK = ("in stock", "in-stock", "in_stock", "instock", "available", "add to cart")
 _OUT_OF_STOCK = ("out of stock", "out-of-stock", "sold out", "unavailable", "backorder")
 

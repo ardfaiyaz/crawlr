@@ -65,6 +65,10 @@ def _print_quality(result) -> None:
     tags.append("LLM" if result.used_llm else "heuristic")
     conf_color = "green" if result.confidence >= 0.8 else "yellow" if result.confidence >= 0.4 else "red"
     tags.append(f"confidence [{conf_color}]{result.confidence:.0%}[/{conf_color}]")
+    q_color = {"verified": "green", "high": "green", "inferred": "yellow", "low": "red"}.get(
+        result.quality, "dim"
+    )
+    tags.append(f"quality [{q_color}]{result.quality}[/{q_color}]")
     tags.append("valid" if result.valid else "[red]invalid[/red]")
     u = usage.snapshot()
     if u.calls:
@@ -166,13 +170,16 @@ def watchlist(as_json: bool = typer.Option(False, "--json", help="Output raw JSO
     if not rows:
         console.print("[dim]Nothing watched yet. Add one with: crawlr watch <url>[/dim]")
         return
-    table = Table("ID", "Product", "Current", "Was", "Change", "Stock", "Target", "Status")
+    table = Table("ID", "Product", "Current", "Low", "Change", "Stock", "Target", "Status")
     for r in rows:
+        low = _price(r.get("low"))
+        if r.get("is_all_time_low") and r.get("low") is not None:
+            low = f"[green]{low} \u2605[/green]"
         table.add_row(
             str(r["id"]),
             _fmt(r["title"]),
             _price(r["price"]),
-            _price(r["prev_price"]),
+            low,
             _change(r["change_pct"]),
             _stock(r["in_stock"]),
             _price(r["target_price"]),
@@ -423,6 +430,40 @@ def stats(as_json: bool = typer.Option(False, "--json", help="Output raw JSON"))
             str(r["heals"] or 0), str(r["llm_runs"] or 0),
         )
     console.print(table)
+
+
+@app.command()
+def insights(
+    site_id: int = typer.Argument(..., help="Site ID (see `crawlr sites`)"),
+    field: str = typer.Option("price", help="Field to analyze"),
+    as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+) -> None:
+    """Price-history analytics for a site: all-time low/high, average, deal."""
+    storage.init_db()
+    site = storage.get_site(site_id)
+    if site is None:
+        console.print(f"[red]No site with id {site_id}.[/red]")
+        raise typer.Exit(code=1)
+    records = storage.latest_records(site_id)
+    item_key = records[0].get("item_key") if records else None
+    ins = storage.price_insights(site_id, item_key, field)
+    if as_json:
+        print(json.dumps(ins, indent=2, default=str))
+        return
+    if not ins["count"]:
+        console.print("[dim]No price history yet — check this site a few times first.[/dim]")
+        return
+    table = Table("Metric", "Value", title=f"{field} insights for {site['url']}")
+    table.add_row("Current", _price(ins["current"]))
+    table.add_row("All-time low", _price(ins["low"]))
+    table.add_row("All-time high", _price(ins["high"]))
+    table.add_row("Average", _price(ins["avg"]))
+    if ins["pct_vs_avg"] is not None:
+        table.add_row("vs average", _change(ins["pct_vs_avg"]))
+    table.add_row("Data points", str(ins["count"]))
+    console.print(table)
+    if ins["is_all_time_low"]:
+        console.print("[green]\u2605 Currently at its lowest recorded price![/green]")
 
 
 @app.command()

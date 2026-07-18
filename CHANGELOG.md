@@ -21,8 +21,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   per-item price-history charts, pause/resume/delete, background "Check now",
   a digest button, and auto-refresh.
 - **Health probes** — `/healthz` and `/readyz`.
-- **CLI** — `unwatch`, `pause`, `resume`, `compare`, and `--json` output on
-  `watchlist`, `sites`, `changes`, and `stats`.
+- **CLI** — `unwatch`, `pause`, `resume`, `compare`, `insights`, and `--json`
+  output on `watchlist`, `sites`, `changes`, and `stats`.
+- **Richer, more accurate data** — structured-data extraction now also pulls
+  brand, SKU/GTIN/MPN, review count, list/original price (incl. AggregateOffer),
+  currency, and more availability states; a computed discount %; per-field
+  **provenance** (`structured`/`selector`/`both`) and a **data-quality** label
+  (`verified`/`high`/`inferred`/`low`).
+- **Price analytics** — all-time low/high, average, and current-vs-average via
+  `crawlr insights`, `GET /api/insights`, the dashboard detail page, and an
+  all-time-low marker in the watchlist.
 - **Docker** — `Dockerfile`, `docker-compose.yml`, and a GHCR publish workflow
   for `docker run ghcr.io/ardfaiyaz/crawlr`.
 
