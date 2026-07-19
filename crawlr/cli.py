@@ -231,23 +231,38 @@ def compare(
     from .extractor import scrape as do_scrape
 
     _mode_banner()
-    table = Table("URL", "Title", "Price", "Stock", "Confidence", title="Price comparison")
-    priced: list[tuple[str, float]] = []
+    table = Table("URL", "Title", "Price", "Currency", "Stock", "Confidence", title="Price comparison")
+    priced: list[tuple[str, float, str | None]] = []
     for url in urls:
         result = do_scrape(url, _resolve_or_detect(schema, url, js), force_js=js)
         rec = result.records[0] if result.records else {}
         price = rec.get("price")
+        currency = rec.get("currency")
         if isinstance(price, (int, float)):
-            priced.append((url, float(price)))
+            priced.append((url, float(price), currency))
         table.add_row(
-            _fmt(url), _fmt(rec.get("title")), _price(price),
+            _fmt(url), _fmt(rec.get("title")), _price(price), currency or "-",
             _stock(triggers.is_in_stock(rec.get("availability"))),
             f"{result.confidence:.0%}",
         )
     console.print(table)
-    if len(priced) >= 2:
-        url, price = min(priced, key=lambda x: x[1])
-        console.print(f"[green]Cheapest:[/green] {url} at {price:g}")
+    if len(priced) < 2:
+        return
+    currencies = {c for _, _, c in priced if c}
+    if len(currencies) > 1:
+        # Never compare across currencies (no FX) — report the cheapest per currency.
+        console.print("[yellow]Mixed currencies — comparing within each currency.[/yellow]")
+        by_currency: dict[str, list[tuple[str, float]]] = {}
+        for u, p, c in priced:
+            by_currency.setdefault(c or "?", []).append((u, p))
+        for cur, items in by_currency.items():
+            u, p = min(items, key=lambda x: x[1])
+            console.print(f"[green]Cheapest ({cur}):[/green] {u} at {p:g}")
+    else:
+        best_url, best_price, best_cur = min(priced, key=lambda x: x[1])
+        console.print(
+            f"[green]Cheapest:[/green] {best_url} at {best_price:g} {best_cur or ''}".rstrip()
+        )
 
 
 @app.command()
@@ -447,8 +462,9 @@ def insights(
     records = storage.latest_records(site_id)
     item_key = records[0].get("item_key") if records else None
     ins = storage.price_insights(site_id, item_key, field)
+    avail = storage.availability_stats(site_id, item_key)
     if as_json:
-        print(json.dumps(ins, indent=2, default=str))
+        print(json.dumps({**ins, "availability": avail}, indent=2, default=str))
         return
     if not ins["count"]:
         console.print("[dim]No price history yet — check this site a few times first.[/dim]")
@@ -460,7 +476,11 @@ def insights(
     table.add_row("Average", _price(ins["avg"]))
     if ins["pct_vs_avg"] is not None:
         table.add_row("vs average", _change(ins["pct_vs_avg"]))
+    table.add_row("Deal score", f"{ins['deal_score']}/100")
     table.add_row("Data points", str(ins["count"]))
+    if avail["samples"]:
+        table.add_row("In stock (history)", f"{avail['in_stock_pct']}%")
+        table.add_row("Restocks seen", str(avail["restocks"]))
     console.print(table)
     if ins["is_all_time_low"]:
         console.print("[green]\u2605 Currently at its lowest recorded price![/green]")

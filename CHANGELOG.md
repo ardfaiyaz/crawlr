@@ -28,9 +28,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   currency, and more availability states; a computed discount %; per-field
   **provenance** (`structured`/`selector`/`both`) and a **data-quality** label
   (`verified`/`high`/`inferred`/`low`).
-- **Price analytics** — all-time low/high, average, and current-vs-average via
+- **Price analytics** — all-time low/high, average, current-vs-average, a 0–100
+  **deal score**, and **availability stats** (in-stock %, restocks) via
   `crawlr insights`, `GET /api/insights`, the dashboard detail page, and an
   all-time-low marker in the watchlist.
+- **Anomaly guard** — price changes that are statistical outliers vs an item's
+  own history (robust z-score/MAD) are quarantined so a glitch can't poison
+  alerts or history (`CRAWLR_ANOMALY_ZSCORE`).
+- **Persisted data-quality** — each run's quality (`verified`/`inferred`/…) is
+  stored and shown as a badge in the dashboard watchlist and `/api/watchlist`.
+- **Currency-safe compare** — `crawlr compare` shows currency and never compares
+  across currencies without FX (reports the cheapest per currency instead).
+- **Accuracy gate** — golden-fixture extraction accuracy is asserted in the test
+  suite (CI), so it can't silently regress.
 - **Docker** — `Dockerfile`, `docker-compose.yml`, and a GHCR publish workflow
   for `docker run ghcr.io/ardfaiyaz/crawlr`.
 

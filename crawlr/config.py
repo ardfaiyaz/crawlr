@@ -46,6 +46,13 @@ SNAPSHOT_DIR = Path(os.getenv("CRAWLR_SNAPSHOT_DIR", str(DATA_DIR / "snapshots")
 # (0.0 disables the gate). Uses per-field consensus confidence.
 MIN_FIELD_CONFIDENCE = float(os.getenv("CRAWLR_MIN_FIELD_CONFIDENCE", "0.0"))
 
+# Anomaly guard: quarantine a price change when it's a statistical outlier vs the
+# item's own history (robust z-score via MAD). 0 disables. The guard only kicks
+# in once there are at least ANOMALY_MIN_SAMPLES prior points, so thin history is
+# never quarantined.
+ANOMALY_ZSCORE = float(os.getenv("CRAWLR_ANOMALY_ZSCORE", "6.0"))
+ANOMALY_MIN_SAMPLES = int(os.getenv("CRAWLR_ANOMALY_MIN_SAMPLES", "6"))
+
 # Hosted API: when set, the JSON API requires this key (X-API-Key or Bearer).
 # Left unset, the API is open (fine for local use).
 API_KEY = os.getenv("CRAWLR_API_KEY", "") or None

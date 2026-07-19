@@ -13,7 +13,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Callable
 
-from . import alerts, config, db, normalize, storage, triggers
+from . import alerts, anomaly, config, db, normalize, storage, triggers
 from .config import MAX_PRICE_CHANGE_FACTOR, MIN_FIELD_CONFIDENCE
 from .extractor import scrape
 from .models import ExtractionResult, ExtractionSchema, PriceChange
@@ -107,6 +107,7 @@ def run_once(
         confidence=result.confidence,
         fetched_at=result.fetched_at.isoformat(),
         key_field=key_field,
+        quality=result.quality,
     )
 
     changes: list[PriceChange] = []
@@ -121,6 +122,10 @@ def run_once(
                 c for c in changes
                 if result.field_confidence.get(c.field, 1.0) >= MIN_FIELD_CONFIDENCE
             ]
+        # Anomaly guard: quarantine statistically wild price moves (robust z-score
+        # vs the item's own history) so a glitch can't poison alerts or history.
+        if config.ANOMALY_ZSCORE > 0 and changes:
+            changes = _drop_anomalies(site_id, changes, result)
         storage.record_changes(site_id, changes)
         if send_alerts and changes:
             # Only alert on changes matching the site's trigger / rules template.
@@ -148,6 +153,29 @@ def run_once(
         storage.prune_site_runs(site_id, config.RETENTION_RUNS)
 
     return result, changes
+
+
+def _drop_anomalies(
+    site_id: int, changes: list[PriceChange], result: ExtractionResult
+) -> list[PriceChange]:
+    """Filter out price changes whose new value is a statistical outlier."""
+    kept: list[PriceChange] = []
+    for c in changes:
+        if c.field == "price":
+            # History for this item, excluding the just-stored current value.
+            history = [
+                p["value"] for p in storage.price_history(site_id, c.product_url, "price")
+            ][:-1]
+            new_value = normalize.normalize_number(c.new_value)
+            if anomaly.is_price_outlier(
+                new_value, history, config.ANOMALY_ZSCORE, config.ANOMALY_MIN_SAMPLES
+            ):
+                result.warnings.append(
+                    f"Quarantined anomalous price {c.new_value} for {c.product_url}"
+                )
+                continue
+        kept.append(c)
+    return kept
 
 
 def _plausible_change(change: PriceChange) -> bool:

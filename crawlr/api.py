@@ -180,7 +180,9 @@ def api_alerts(site_id: int | None = None, limit: int = 50) -> list[dict]:
 
 @app.get("/api/insights", dependencies=_AUTH)
 def api_insights(site_id: int, item_key: str | None = None, field: str = "price") -> dict:
-    return storage.price_insights(site_id, item_key, field)
+    data = storage.price_insights(site_id, item_key, field)
+    data["availability"] = storage.availability_stats(site_id, item_key)
+    return data
 
 
 @app.get("/api/schemas", dependencies=_AUTH)
@@ -379,6 +381,7 @@ def site_detail(site_id: int) -> HTMLResponse:
     changes = storage.recent_changes(site_id, limit=50)
     run = storage.latest_run(site_id)
     insights = storage.price_insights(site_id, primary.get("item_key")) if records else _empty_insights()
+    avail = storage.availability_stats(site_id, primary.get("item_key")) if records else {}
     return HTMLResponse(
         _render(
             "detail.html",
@@ -387,6 +390,7 @@ def site_detail(site_id: int) -> HTMLResponse:
             changes=changes,
             run=run,
             insights=insights,
+            avail=avail,
             chart=_chart(values) if len(values) >= 2 else "",
             points=len(values),
         )
@@ -620,7 +624,7 @@ _DASHBOARD = """{% extends "base.html" %}
             {% else %}<span class="dim">—</span>{% endif %}
           </td>
           <td class="num">{{ "%g"|format(r.target_price) if r.target_price is number else "—" }}</td>
-          <td><span class="pill {% if not r.active %}off{% endif %}">{{ r.status }}</span></td>
+          <td><span class="pill {% if not r.active %}off{% endif %}">{{ r.status }}</span>{% if r.quality and r.quality != "unknown" %}<div class="sub">{{ r.quality }}</div>{% endif %}</td>
           <td>
             <div class="actions">
               <form class="inline" method="post" action="/sites/{{ r.id }}/run"><button class="btn btn-ghost btn-mini">Check</button></form>
@@ -721,6 +725,14 @@ _DETAIL = """{% extends "base.html" %}
     <div class="stat"><div class="n">{{ "%g"|format(insights.low) if insights.low is not none else "—" }}</div><div class="l">All-time low</div></div>
     <div class="stat"><div class="n">{{ "%g"|format(insights.avg) if insights.avg is not none else "—" }}</div><div class="l">Average</div></div>
     <div class="stat"><div class="n">{{ "%g"|format(insights.high) if insights.high is not none else "—" }}</div><div class="l">All-time high</div></div>
+  </div>
+  <div class="grid">
+    <div class="stat"><div class="n">{{ insights.deal_score }}</div><div class="l">Deal score / 100</div></div>
+    {% if avail and avail.samples %}
+    <div class="stat"><div class="n">{{ avail.in_stock_pct }}%</div><div class="l">In stock (history)</div></div>
+    <div class="stat"><div class="n">{{ avail.restocks }}</div><div class="l">Restocks seen</div></div>
+    <div class="stat"><div class="n">{{ "Yes" if avail.currently_in_stock else "No" }}</div><div class="l">In stock now</div></div>
+    {% endif %}
   </div>
   {% if insights.is_all_time_low %}<div class="flash ok">&#9733; Currently at its lowest recorded price.</div>{% endif %}
   {% endif %}

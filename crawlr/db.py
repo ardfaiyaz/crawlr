@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS runs (
     record_count INTEGER NOT NULL,
     healed INTEGER NOT NULL DEFAULT 0,
     used_llm INTEGER NOT NULL DEFAULT 0,
-    confidence REAL NOT NULL DEFAULT 1.0
+    confidence REAL NOT NULL DEFAULT 1.0,
+    quality TEXT NOT NULL DEFAULT 'unknown'
 );
 CREATE TABLE IF NOT EXISTS records (
     id {_PK},
@@ -171,6 +172,7 @@ def init_schema(conn) -> None:
 _MIGRATIONS = [
     ("sites", "alert_trigger", "TEXT NOT NULL DEFAULT 'any_change'"),
     ("sites", "target_price", "REAL"),
+    ("runs", "quality", "TEXT NOT NULL DEFAULT 'unknown'"),
 ]
 
 

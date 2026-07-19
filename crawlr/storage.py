@@ -169,14 +169,16 @@ def record_run(
     confidence: float = 1.0,
     fetched_at: str | None = None,
     key_field: str | None = None,
+    quality: str = "unknown",
 ) -> int:
     ts = fetched_at or _now_iso()
     with db.connect() as conn:
         run_id = db.insert_returning_id(
             conn,
-            """INSERT INTO runs (site_id, fetched_at, record_count, healed, used_llm, confidence)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (site_id, ts, len(records), int(healed), int(used_llm), float(confidence)),
+            """INSERT INTO runs
+               (site_id, fetched_at, record_count, healed, used_llm, confidence, quality)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (site_id, ts, len(records), int(healed), int(used_llm), float(confidence), quality),
         )
         if run_id is None:
             raise RuntimeError("failed to record run (no insert id returned)")
@@ -346,12 +348,25 @@ def all_price_points(field: str = "price") -> dict[tuple[int, str | None], list[
     return out
 
 
+def _deal_score(values: list[float], low: float, high: float, current: float) -> int:
+    """0..100 "how good is this price right now" score.
+
+    Blends how far below the all-time high the current price sits (position) with
+    how rarely the price has been this low before (rarity). 100 = best deal seen.
+    """
+    if len(values) < 2 or high <= low:
+        return 0
+    position = (high - current) / (high - low)          # 1.0 at the all-time low
+    rarity = sum(1 for v in values if v >= current) / len(values)  # rarely this cheap
+    return max(0, min(100, round(100 * (0.6 * position + 0.4 * rarity))))
+
+
 def _stats_from(values: list[float]) -> dict:
     """Compute price-history analytics from a numeric series (newest last)."""
     if not values:
         return {
             "count": 0, "low": None, "high": None, "avg": None,
-            "current": None, "pct_vs_avg": None, "is_all_time_low": False,
+            "current": None, "pct_vs_avg": None, "is_all_time_low": False, "deal_score": 0,
         }
     low, high = min(values), max(values)
     avg = round(sum(values) / len(values), 2)
@@ -361,6 +376,42 @@ def _stats_from(values: list[float]) -> dict:
         "count": len(values), "low": low, "high": high, "avg": avg,
         "current": current, "pct_vs_avg": pct_vs_avg,
         "is_all_time_low": current <= low,
+        "deal_score": _deal_score(values, low, high, current),
+    }
+
+
+def availability_stats(site_id: int, item_key: str | None = None) -> dict:
+    """In-stock ratio, restock count, and current stock state from history."""
+    with db.connect() as conn:
+        if item_key is None:
+            rows = conn.execute(
+                db.q(
+                    "SELECT data_json FROM records WHERE site_id=? AND item_key IS NULL "
+                    "ORDER BY fetched_at ASC"
+                ),
+                (site_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                db.q(
+                    "SELECT data_json FROM records WHERE site_id=? AND item_key=? "
+                    "ORDER BY fetched_at ASC"
+                ),
+                (site_id, item_key),
+            ).fetchall()
+    states = []
+    for r in rows:
+        state = triggers.is_in_stock(json.loads(r["data_json"]).get("availability"))
+        if state is not None:
+            states.append(state)
+    if not states:
+        return {"samples": 0, "in_stock_pct": None, "restocks": 0, "currently_in_stock": None}
+    restocks = sum(1 for a, b in zip(states, states[1:]) if not a and b)
+    return {
+        "samples": len(states),
+        "in_stock_pct": round(sum(1 for s in states if s) / len(states) * 100, 1),
+        "restocks": restocks,
+        "currently_in_stock": states[-1],
     }
 
 
@@ -426,7 +477,9 @@ def watchlist() -> list[dict]:
                 "avg": stats["avg"],
                 "pct_vs_avg": stats["pct_vs_avg"],
                 "is_all_time_low": stats["is_all_time_low"],
+                "deal_score": stats["deal_score"],
                 "confidence": run["confidence"] if run else None,
+                "quality": run.get("quality") if run else None,
                 "last_checked": run["fetched_at"] if run else None,
                 "status": triggers.watch_status(price, in_stock, prev_price, trigger, target),
             }
