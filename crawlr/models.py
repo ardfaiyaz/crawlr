@@ -84,6 +84,10 @@ class ExtractionResult(BaseModel):
     field_source: dict = Field(default_factory=dict)
     # Overall data-quality label: verified | high | inferred | low.
     quality: str = "unknown"
+    # Fetch diagnostics.
+    blocked: bool = False           # the page was blocked / anti-bot challenged
+    rendered_with_js: bool = False  # a headless browser rendered the page
+    content_hash: str | None = None  # hash of fetched HTML (stale-page detection)
     # False when any record fails schema validation.
     valid: bool = True
 

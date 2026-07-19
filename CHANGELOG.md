@@ -35,6 +35,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Anomaly guard** — price changes that are statistical outliers vs an item's
   own history (robust z-score/MAD) are quarantined so a glitch can't poison
   alerts or history (`CRAWLR_ANOMALY_ZSCORE`).
+- **Rendering/fetch reliability** — blocked/anti-bot runs are no longer recorded
+  (so a block can't create a false "price → null"/out-of-stock and the site is
+  retried next cycle); **stale-page detection** flags identical content between
+  checks; results now expose `blocked`, `rendered_with_js`, and `content_hash`.
 - **Persisted data-quality** — each run's quality (`verified`/`inferred`/…) is
   stored and shown as a badge in the dashboard watchlist and `/api/watchlist`.
 - **Currency-safe compare** — `crawlr compare` shows currency and never compares

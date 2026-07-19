@@ -10,6 +10,8 @@ Flow per scrape:
 
 from __future__ import annotations
 
+import hashlib
+
 from selectolax.parser import HTMLParser, Node
 
 from . import archive, config, llm, normalize, selector_cache, structured, usage
@@ -18,11 +20,20 @@ from .models import ExtractionResult, ExtractionSchema, FieldSpec, FieldType
 from .validate import confidence_score, validate_records
 
 
+def _content_hash(html: str) -> str | None:
+    if not html:
+        return None
+    return hashlib.sha256(html.encode("utf-8", "ignore")).hexdigest()
+
+
 def scrape(url: str, schema: ExtractionSchema, force_js: bool = False) -> ExtractionResult:
     """Scrape a URL against a schema, self-healing selectors if they break."""
     usage.begin_run()
     fetched = fetch(url, force_js=force_js)
     result = ExtractionResult(url=fetched.url, schema_name=schema.name)
+    result.blocked = fetched.blocked
+    result.rendered_with_js = fetched.rendered_with_js
+    result.content_hash = _content_hash(fetched.html)
 
     if fetched.blocked:
         result.warnings.append(f"Blocked ({fetched.blocked_reason or 'unknown'}).")

@@ -98,6 +98,13 @@ def run_once(
 
     result = scrape(site["url"], schema, force_js=force_js)
 
+    # Don't record blocked runs: storing empty/None values would poison history
+    # and could fire false "out of stock" / price-dropped-to-null alerts. Leaving
+    # the run unrecorded also keeps the site "due" so it's retried next cycle.
+    if getattr(result, "blocked", False):
+        return result, []
+
+    prev_hash = storage.last_content_hash(site_id)
     previous = storage.latest_records(site_id)  # becomes "old" before we write new
     storage.record_run(
         site_id,
@@ -108,7 +115,13 @@ def run_once(
         fetched_at=result.fetched_at.isoformat(),
         key_field=key_field,
         quality=result.quality,
+        content_hash=getattr(result, "content_hash", None),
     )
+
+    # Stale-page detection: identical content since last check. Diffing will find
+    # no changes anyway, so surface it as a note rather than doing extra work.
+    if prev_hash and result.content_hash and prev_hash == result.content_hash:
+        result.warnings.append("Page unchanged since last check (identical content).")
 
     changes: list[PriceChange] = []
     if previous:

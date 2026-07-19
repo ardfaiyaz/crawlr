@@ -170,15 +170,18 @@ def record_run(
     fetched_at: str | None = None,
     key_field: str | None = None,
     quality: str = "unknown",
+    content_hash: str | None = None,
 ) -> int:
     ts = fetched_at or _now_iso()
     with db.connect() as conn:
         run_id = db.insert_returning_id(
             conn,
             """INSERT INTO runs
-               (site_id, fetched_at, record_count, healed, used_llm, confidence, quality)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (site_id, ts, len(records), int(healed), int(used_llm), float(confidence), quality),
+               (site_id, fetched_at, record_count, healed, used_llm, confidence, quality,
+                content_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (site_id, ts, len(records), int(healed), int(used_llm), float(confidence), quality,
+             content_hash),
         )
         if run_id is None:
             raise RuntimeError("failed to record run (no insert id returned)")
@@ -413,6 +416,19 @@ def availability_stats(site_id: int, item_key: str | None = None) -> dict:
         "restocks": restocks,
         "currently_in_stock": states[-1],
     }
+
+
+def last_content_hash(site_id: int) -> str | None:
+    """Content hash of the most recent run (for stale-page detection)."""
+    with db.connect() as conn:
+        row = conn.execute(
+            db.q(
+                "SELECT content_hash FROM runs WHERE site_id=? "
+                "ORDER BY fetched_at DESC, id DESC LIMIT 1"
+            ),
+            (site_id,),
+        ).fetchone()
+    return row["content_hash"] if row else None
 
 
 def price_insights(site_id: int, item_key: str | None = None, field: str = "price") -> dict:

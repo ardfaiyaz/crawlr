@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS runs (
     healed INTEGER NOT NULL DEFAULT 0,
     used_llm INTEGER NOT NULL DEFAULT 0,
     confidence REAL NOT NULL DEFAULT 1.0,
-    quality TEXT NOT NULL DEFAULT 'unknown'
+    quality TEXT NOT NULL DEFAULT 'unknown',
+    content_hash TEXT
 );
 CREATE TABLE IF NOT EXISTS records (
     id {_PK},
@@ -173,6 +174,7 @@ _MIGRATIONS = [
     ("sites", "alert_trigger", "TEXT NOT NULL DEFAULT 'any_change'"),
     ("sites", "target_price", "REAL"),
     ("runs", "quality", "TEXT NOT NULL DEFAULT 'unknown'"),
+    ("runs", "content_hash", "TEXT"),
 ]
 
 

@@ -44,6 +44,7 @@ def test_run_once_quarantines_anomalous_price(monkeypatch):
             url=url, records=[{"title": "W", "price": 160.0}], healed=False, used_llm=False,
             confidence=1.0, fetched_at=datetime.datetime.now(datetime.timezone.utc),
             field_confidence={}, field_source={}, quality="high", warnings=[], valid=True,
+            blocked=False, rendered_with_js=False, content_hash="hash160",
         )
 
     monkeypatch.setattr(monitor, "scrape", fake_scrape)
