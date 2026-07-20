@@ -15,9 +15,11 @@ work directly. Add your own stores via a YAML file (CRAWLR_CANVAS_RETAILERS).
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from urllib.parse import quote_plus, urljoin
 
 from . import config, currency
@@ -162,12 +164,125 @@ def _load_user_retailers() -> dict[str, Retailer]:
     return out
 
 
+# --- IP geolocation (best-effort country auto-detection) --------------------
+
+# Endpoints tried in order; each returns JSON with an ISO country code under the
+# given key. All free / keyless. Any failure just moves on to the next.
+_GEO_ENDPOINTS: list[tuple[str, str]] = [
+    ("https://ipapi.co/json/", "country_code"),
+    ("https://ipwho.is/", "country_code"),
+    ("http://ip-api.com/json/", "countryCode"),
+]
+
+
+def _read_geo_cache() -> str | None:
+    """Return the cached country code if present and still fresh, else None."""
+    p = config.CANVAS_GEO_CACHE_PATH
+    try:
+        if not p.exists():
+            return None
+        data = json.loads(p.read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    ts, code = data.get("fetched_at"), data.get("country")
+    if not ts or not code:
+        return None
+    try:
+        fetched = datetime.fromisoformat(ts)
+    except ValueError:
+        return None
+    if fetched.tzinfo is None:
+        fetched = fetched.replace(tzinfo=timezone.utc)
+    age_hours = (datetime.now(timezone.utc) - fetched).total_seconds() / 3600.0
+    if age_hours >= max(0.0, config.CANVAS_GEO_CACHE_HOURS):
+        return None
+    return str(code).lower()
+
+
+def _write_geo_cache(code: str) -> None:
+    try:
+        config.CANVAS_GEO_CACHE_PATH.write_text(
+            json.dumps({"fetched_at": datetime.now(timezone.utc).isoformat(), "country": code}),
+            "utf-8",
+        )
+    except OSError as exc:  # pragma: no cover - disk-only failure
+        logger.warning("Could not cache geo country: %s", exc)
+
+
+def _lookup_ip_country() -> str | None:
+    """Query the geolocation endpoints. Returns a lowercase ISO code or None."""
+    try:
+        import httpx
+    except Exception:  # pragma: no cover - httpx is a hard dependency
+        return None
+    for url, key in _GEO_ENDPOINTS:
+        try:
+            resp = httpx.get(url, timeout=config.CANVAS_GEO_TIMEOUT, follow_redirects=True)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:  # network/parse failure -> try the next endpoint
+            logger.debug("Geo lookup via %s failed: %s", url, exc)
+            continue
+        code = data.get(key) if isinstance(data, dict) else None
+        if isinstance(code, str) and len(code) == 2 and code.isalpha():
+            return code.lower()
+    logger.info("Canvas: IP geolocation unavailable; falling back.")
+    return None
+
+
+def detect_country_by_ip() -> str | None:
+    """Best-effort ISO country code from the machine's public IP.
+
+    Cached to disk (see CRAWLR_GEO_CACHE_HOURS). Any failure returns None so
+    callers fall back gracefully. Disable entirely with CRAWLR_GEO=false.
+    """
+    if not config.CANVAS_GEO:
+        return None
+    cached = _read_geo_cache()
+    if cached:
+        return cached
+    code = _lookup_ip_country()
+    if code:
+        _write_geo_cache(code)
+    return code
+
+
+def _resolve_country(
+    country: str | None,
+    explicit_ccy: str | None,
+    use_geo: bool,
+) -> tuple[str | None, str]:
+    """Return ``(country_code, source)``.
+
+    Priority: explicit ``--country`` > ``CRAWLR_COUNTRY`` > explicit ``--to``
+    currency > IP geolocation > default reporting currency (``CRAWLR_FX_BASE``).
+    ``source`` is one of flag/env/currency/ip/currency-default/global.
+    """
+    if country and country.strip():
+        return country.strip().lower(), "flag"
+    if config.CANVAS_COUNTRY:
+        return config.CANVAS_COUNTRY, "env"
+    if explicit_ccy:
+        c = _CCY_COUNTRY.get(explicit_ccy.upper())
+        if c:
+            return c, "currency"
+    if use_geo:
+        c = detect_country_by_ip()
+        if c:
+            return c, "ip"
+    c = _CCY_COUNTRY.get(config.FX_BASE)
+    if c:
+        return c, "currency-default"
+    return None, "global"
+
+
 def resolve_country(country: str | None = None, base_ccy: str | None = None) -> str | None:
-    """Work out which country's marketplaces to use.
+    """Work out which country's marketplaces to use (no network lookup).
 
     Priority: explicit ``country`` arg > ``CRAWLR_COUNTRY`` env > inferred from
-    the target currency (e.g. PHP -> ph). Returns ``None`` if nothing matches,
-    in which case the global retailer set is used.
+    the target currency (e.g. PHP -> ph). Returns ``None`` if nothing matches.
+    For IP auto-detection, use :func:`detect_country_by_ip` (invoked by
+    :func:`search`).
     """
     if country and country.strip():
         return country.strip().lower()
@@ -254,11 +369,14 @@ def search(
 ) -> dict:
     """Search each retailer for ``query`` and return ranked price hits.
 
-    ``country`` (ISO-3166 alpha-2) selects local marketplaces; when omitted it's
-    inferred from the target currency, falling back to the global retailer set.
+    ``country`` (ISO-3166 alpha-2) selects local marketplaces. When omitted, it's
+    resolved in this order: ``CRAWLR_COUNTRY`` > the explicit ``base`` currency >
+    IP geolocation (auto) > the default reporting currency > global stores.
     """
     base_ccy = (base or config.FX_BASE).upper()
-    resolved_country = resolve_country(country, base_ccy)
+    resolved_country, country_source = _resolve_country(
+        country, explicit_ccy=base, use_geo=config.CANVAS_GEO
+    )
     catalog = available_retailers(resolved_country)
     rates, fx_source = currency.get_rates()
     hits: list[CanvasHit] = []
@@ -299,6 +417,7 @@ def search(
         "query": query,
         "base": base_ccy,
         "country": resolved_country,
+        "country_source": country_source,
         "fx_source": fx_source,
         "retailers_searched": [r.name for r in selected],
         "hits": hits,

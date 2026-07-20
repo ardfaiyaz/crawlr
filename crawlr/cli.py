@@ -382,9 +382,10 @@ def canvas(
     them.
 
     Use --country to search local marketplaces (e.g. --country ph adds Lazada PH,
-    Shopee PH, Zalora PH). If omitted, the country is inferred from your currency
-    (e.g. --to PHP). Marketplaces that block bots need a fetch provider — see
-    CRAWLR_FETCH_PROVIDER.
+    Shopee PH, Zalora PH). If omitted, Crawlr auto-detects your country from your
+    IP address (cached; disable with CRAWLR_GEO=false), or infers it from your
+    currency (e.g. --to PHP). Marketplaces that block bots need a fetch provider —
+    see CRAWLR_FETCH_PROVIDER.
     """
     from . import canvas as canvas_mod
     from . import config as cfg
@@ -395,11 +396,21 @@ def canvas(
     hits = report["hits"]
     base = report["base"]
     resolved_country = report.get("country")
+    country_source = report.get("country_source")
+    _source_note = {
+        "flag": "from --country",
+        "env": "from CRAWLR_COUNTRY",
+        "currency": "from currency",
+        "ip": "auto-detected from your IP",
+        "currency-default": "default currency",
+    }
 
     if resolved_country:
         searched = ", ".join(report.get("retailers_searched", [])) or "—"
+        note = _source_note.get(country_source or "", "")
+        suffix = f" ({note})" if note else ""
         console.print(
-            f"[dim]Region: {resolved_country.upper()} · searching: {searched}[/dim]"
+            f"[dim]Region: {resolved_country.upper()}{suffix} · searching: {searched}[/dim]"
         )
     else:
         console.print(

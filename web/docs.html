@@ -20,7 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
-        <span class="ver">v0.4.0</span>
+        <span class="ver">v0.4.1</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -220,8 +220,13 @@
           <tr><td>Canada</td><td><code>ca</code></td><td>Amazon CA, eBay CA, Newegg CA</td></tr>
         </tbody>
       </table>
-      <p>With no country and no currency hint, Crawlr uses the global stores. Add your own shops any
-      time with a YAML file (<code>CRAWLR_CANVAS_RETAILERS</code>).</p>
+      <p><strong>How the country is chosen</strong> (first match wins): <code>--country</code> flag →
+      <code>CRAWLR_COUNTRY</code> → the currency you asked for (<code>--to PHP</code>) →
+      <strong>your IP address</strong> (auto-detected, cached, no key needed) → global stores.
+      So usually you don't pass anything — from the Philippines, <code>crawlr canvas "mad60 he"</code>
+      automatically searches Lazada PH, Shopee PH &amp; Zalora PH. Disable the IP lookup with
+      <code>CRAWLR_GEO=false</code> (fully offline). Add your own shops with a YAML file
+      (<code>CRAWLR_CANVAS_RETAILERS</code>).</p>
       <p><strong>Important:</strong> local marketplaces like <strong>Lazada and Shopee block bots</strong>
       (just like Amazon). For real results from them, set up a
       <a href="#config-provider">fetch provider</a> first — otherwise those rows show "blocked or
@@ -417,6 +422,8 @@
           <tr><td><code>CRAWLR_FETCH_PROVIDER_RENDER</code></td><td><code>true</code></td><td>Ask the provider to render JavaScript (costs more credits)</td></tr>
           <tr><td><code>CRAWLR_CANVAS_RETAILERS</code></td><td>—</td><td>YAML file adding your own stores to <code>crawlr canvas</code></td></tr>
           <tr><td><code>CRAWLR_COUNTRY</code></td><td>—</td><td>Default country for <code>crawlr canvas</code> local stores (ISO code, e.g. <code>ph</code>, <code>us</code>)</td></tr>
+          <tr><td><code>CRAWLR_GEO</code></td><td><code>true</code></td><td>Auto-detect the canvas country from your IP when no country/currency is given</td></tr>
+          <tr><td><code>CRAWLR_GEO_TIMEOUT</code></td><td><code>3.0</code></td><td>Seconds to wait for the IP-geolocation lookup before falling back</td></tr>
           <tr><td><code>CRAWLR_MIN_FIELD_CONFIDENCE</code></td><td><code>0.0</code></td><td>Minimum confidence before alerting on a field</td></tr>
           <tr><td><code>CRAWLR_API_KEY</code></td><td>—</td><td>Protects the JSON API when set</td></tr>
         </tbody>

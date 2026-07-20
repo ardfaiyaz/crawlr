@@ -119,8 +119,18 @@ CANVAS_RETAILERS_FILE = os.getenv("CRAWLR_CANVAS_RETAILERS", "") or None
 
 # Preferred country for `crawlr canvas` (ISO-3166 alpha-2, e.g. "ph", "us").
 # When set, canvas includes that country's local marketplaces (Lazada/Shopee for
-# PH, etc.). If unset, canvas infers it from the target currency (PHP -> ph).
+# PH, etc.). If unset, canvas auto-detects it (see below) or infers it from the
+# target currency (PHP -> ph).
 CANVAS_COUNTRY = (os.getenv("CRAWLR_COUNTRY", "") or "").strip().lower() or None
+
+# Auto-detect the canvas country from the machine's public IP when the user
+# gives no country and no explicit currency. Fully graceful: any failure falls
+# back to currency inference / global stores. Set false to disable (offline).
+CANVAS_GEO = os.getenv("CRAWLR_GEO", "true").lower() == "true"
+CANVAS_GEO_TIMEOUT = float(os.getenv("CRAWLR_GEO_TIMEOUT", "3.0"))
+# The detected code is cached here so we don't hit the network every run.
+CANVAS_GEO_CACHE_PATH = DATA_DIR / "geo_country.json"
+CANVAS_GEO_CACHE_HOURS = float(os.getenv("CRAWLR_GEO_CACHE_HOURS", "168"))  # 7 days
 
 # Hosted API: when set, the JSON API requires this key (X-API-Key or Bearer).
 # Left unset, the API is open (fine for local use).

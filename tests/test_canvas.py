@@ -81,3 +81,51 @@ def test_canvas_ph_region_selected_for_php(monkeypatch):
     report = canvas.search("MAD60 HE", base="PHP")
     assert report["country"] == "ph"
     assert report["hits"] and report["hits"][0].retailer == "Lazada PH"
+
+
+
+def test_detect_country_by_ip_is_cached(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas.config, "CANVAS_GEO", True)
+    monkeypatch.setattr(canvas.config, "CANVAS_GEO_CACHE_PATH", tmp_path / "geo.json")
+    monkeypatch.setattr(canvas.config, "CANVAS_GEO_CACHE_HOURS", 168.0)
+    calls = {"n": 0}
+
+    def fake_lookup():
+        calls["n"] += 1
+        return "ph"
+
+    monkeypatch.setattr(canvas, "_lookup_ip_country", fake_lookup)
+    assert canvas.detect_country_by_ip() == "ph"
+    assert canvas.detect_country_by_ip() == "ph"  # served from disk cache
+    assert calls["n"] == 1  # network hit only once
+
+
+def test_detect_country_disabled_returns_none(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas.config, "CANVAS_GEO", False)
+    monkeypatch.setattr(canvas.config, "CANVAS_GEO_CACHE_PATH", tmp_path / "geo.json")
+    monkeypatch.setattr(canvas, "_lookup_ip_country", lambda: "ph")
+    assert canvas.detect_country_by_ip() is None
+
+
+def test_search_uses_ip_when_no_hints(monkeypatch):
+    monkeypatch.setattr(canvas.config, "CANVAS_GEO", True)
+    monkeypatch.setattr(canvas.config, "CANVAS_COUNTRY", None)
+    monkeypatch.setattr(canvas, "detect_country_by_ip", lambda: "ph")
+    mapping = {"lazada.com.ph": [{"title": "MAD60 HE", "price": 3500.0, "currency": "PHP", "url": "/p/1"}]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("MAD60 HE")  # no --to, no --country
+    assert report["country"] == "ph"
+    assert report["country_source"] == "ip"
+
+
+def test_explicit_currency_overrides_ip(monkeypatch):
+    monkeypatch.setattr(canvas.config, "CANVAS_GEO", True)
+    monkeypatch.setattr(canvas.config, "CANVAS_COUNTRY", None)
+    monkeypatch.setattr(canvas, "detect_country_by_ip", lambda: "ph")  # would be PH…
+    monkeypatch.setattr(
+        canvas, "scrape",
+        _fake_scrape({"amazon": [{"title": "x", "price": 1.0, "currency": "USD", "url": "/a"}]}),
+    )
+    report = canvas.search("x", base="USD")  # …but explicit currency wins
+    assert report["country"] == "us"
+    assert report["country_source"] == "currency"

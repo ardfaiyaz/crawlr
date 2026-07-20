@@ -6,6 +6,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1]
+
+### Added
+- **Automatic location detection for canvas** — when you don't pass `--country`
+  (and no `CRAWLR_COUNTRY`/explicit currency), Crawlr now auto-detects your
+  country from your public IP and searches your local marketplaces (e.g. Lazada
+  PH, Shopee PH, Zalora PH from the Philippines). The result is cached to disk;
+  any lookup failure falls back gracefully to currency/global. Disable with
+  `CRAWLR_GEO=false`; tune the timeout with `CRAWLR_GEO_TIMEOUT`.
+
 ## [0.4.0]
 
 ### Added

@@ -233,6 +233,8 @@ Full reference:
 | `CRAWLR_FETCH_PROVIDER_RENDER` | `true` | Ask the provider to render JavaScript (costs more credits) |
 | `CRAWLR_CANVAS_RETAILERS` | — | Path to a YAML file adding your own stores to `crawlr canvas` |
 | `CRAWLR_COUNTRY` | — | Default country for `crawlr canvas` local stores (ISO code, e.g. `ph`, `us`) |
+| `CRAWLR_GEO` | `true` | Auto-detect the canvas country from your IP when no country/currency is given |
+| `CRAWLR_GEO_TIMEOUT` | `3.0` | Seconds to wait for the IP-geolocation lookup before falling back |
 
 ## Step-by-step setup guides
 
@@ -515,8 +517,17 @@ local currency with `--to` — and Crawlr searches that country's stores instead
 | Japan | `jp` | Amazon JP, AliExpress |
 | Canada | `ca` | Amazon CA, eBay CA, Newegg CA |
 
-If you don't pass a country, Crawlr infers it from your currency (e.g. `--to PHP` → Philippines);
-with no hint at all it uses the global stores. Add your own shops any time via a YAML file
+**How the country is chosen** (first match wins):
+
+1. `--country ph` — the flag you pass
+2. `CRAWLR_COUNTRY=ph` — your saved default
+3. the explicit currency you asked for (`--to PHP` → Philippines)
+4. **your IP address** — Crawlr auto-detects your location (result is cached; no key needed)
+5. otherwise → global stores
+
+So in most cases you don't have to pass anything — just run `crawlr canvas "mad60 he"` and, from
+the Philippines, it automatically searches Lazada PH, Shopee PH, and Zalora PH. Turn the IP lookup
+off with `CRAWLR_GEO=false` (fully offline). Add your own shops any time via a YAML file
 (`CRAWLR_CANVAS_RETAILERS`).
 
 > **Heads-up (important):** local marketplaces like **Lazada and Shopee aggressively block bots**,
