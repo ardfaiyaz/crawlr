@@ -93,6 +93,47 @@ rules:
     action: alert
 ```
 
+## Every option, explained
+
+**`crawlr watch <url> [options]`** — start tracking a product page or a store's product list.
+
+| Option | What it does |
+|--------|--------------|
+| `--target 500` | Ping me when the price drops to **500 or below** (also sets the trigger to `price_below`) |
+| `--restock` | Ping me when the item goes from **out of stock → in stock** |
+| `--trigger <name>` | Choose exactly *when* to be alerted (see the table below) |
+| `--interval 60` | Check this page **every 60 minutes** (default: 60) |
+| `--schema <name>` | Force the page type instead of auto-detecting: `product`, `product_list`, `jobs`, `real_estate`, `news` |
+
+**Triggers** (`--trigger ...`), in plain English:
+
+| Trigger | Alerts you when… |
+|---------|------------------|
+| `any_change` | **anything** you watch changes (price, stock, title…) |
+| `price_drop` | the price goes **down** by any amount |
+| `price_below` | the price is **at or below** your `--target` |
+| `price_above` | the price is **at or above** your `--target` |
+| `back_in_stock` | the item becomes **available** again |
+| `out_of_stock` | the item **sells out** |
+
+**The commands you'll actually use:**
+
+| Command | What it does |
+|---------|--------------|
+| `crawlr watch <url>` | Start tracking a product or store page |
+| `crawlr watchlist` | Show everything you track: price, change, stock, status |
+| `crawlr monitor` | Check all due pages **once**, right now |
+| `crawlr monitor --daemon` | Keep checking forever in the background |
+| `crawlr compare <url> <url> …` | One-off price comparison across several links |
+| `crawlr insights <id>` | Price analytics: all-time low/high, average, "deal score" |
+| `crawlr pause <id>` / `resume <id>` | Temporarily stop / restart tracking one item |
+| `crawlr unwatch <id>` | Stop tracking an item and delete its history |
+| `crawlr serve` | Open the web dashboard at `http://localhost:8000` |
+| `crawlr doctor` | Check that your setup works |
+| `crawlr test-alert` | Send a test notification so you know alerts reach you |
+
+> The `<id>` numbers come from `crawlr watchlist` or `crawlr sites`.
+
 ## Recipes
 
 ```bash
@@ -187,6 +228,53 @@ wrong, and docs/examples.
 
 A short GIF is the best intro. Generate one with [VHS](https://github.com/charmbracelet/vhs):
 `vhs docs/demo.tape` → `docs/demo.gif` (see [docs/DEMO.md](./docs/DEMO.md)).
+
+## Does it work on big marketplaces (Lazada, Shopee, Amazon)?
+
+**Short answer: it can, but they're the hardest sites to scrape — expect extra setup, and don't count on 100% reliability.**
+
+Crawlr shines on sites with clean HTML or embedded product data (schema.org JSON-LD). Big
+marketplaces are deliberately hostile to bots, in three ways — here's how to give Crawlr its
+best shot:
+
+1. **They render prices with JavaScript.** The price often isn't in the raw HTML; it loads
+   after the page runs its scripts. Install the browser engine so Crawlr can render it:
+   ```bash
+   pip install "crawlr[js]"
+   playwright install chromium
+   ```
+   Then pass `--js` (e.g. `crawlr watch "<url>" --js`) or let Crawlr auto-escalate when it
+   detects a JS-only shell.
+
+2. **They have anti-bot protection** (Cloudflare, CAPTCHAs, rate limits). Crawlr detects when
+   it's blocked and **skips that run** instead of saving a bogus price — but getting through
+   reliably usually needs rotating proxies:
+   ```bash
+   export CRAWLR_PROXIES="http://user:pass@host:port,http://host2:port"
+   ```
+
+3. **robots.txt** — many marketplaces disallow scraping these pages, and Crawlr honors
+   `robots.txt` by default, so it may refuse to fetch. Only override this for sites you're
+   permitted to scrape (see *Legal & responsible use* below):
+   ```bash
+   export CRAWLR_RESPECT_ROBOTS=false
+   ```
+
+**Rule of thumb:**
+
+| Site type | How well it works |
+|-----------|-------------------|
+| Independent shops, Shopify / WooCommerce, anything with schema.org data | ✅ Works well out of the box |
+| A marketplace's **official API** (if it offers one) | ✅ Most reliable — prefer this |
+| Lazada / Shopee / Amazon product pages | ⚠️ Possible with `crawlr[js]` + proxies; may still get blocked |
+| Pages behind a login, or a CAPTCHA on every request | ❌ Not a good fit |
+
+**Tip:** prove the whole flow works on an easy site first, then point it at the hard one:
+
+```bash
+crawlr watch "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html" --target 60
+crawlr watchlist
+```
 
 ## Legal & responsible use
 
