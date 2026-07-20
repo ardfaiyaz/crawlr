@@ -6,6 +6,21 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.1]
+
+### Changed
+- `crawlr canvas --group` now renders a proper **table** (grouped with section
+  dividers) instead of a plain list.
+- **Deduplicate by canonical URL** — the same product reached via different
+  tracking params (`?_psq=…`, `?_pos=…`) collapses to one listing.
+- **Drop non-positive prices** — placeholder `0` prices (e.g. a Shopify
+  `"0.00"`) are ignored instead of shown as `PHP 0`.
+- **More accurate matching** — expanded query variants are scored against the
+  *original* query (so dropping "superlight" no longer surfaces unrelated
+  Logitech items), 1-character tokens are ignored, and the match threshold was
+  raised. Product grouping is tighter so different models aren't merged.
+- Reject "page not found" / "404" / "doesn't exist" titles as junk.
+
 ## [0.7.0]
 
 ### Added

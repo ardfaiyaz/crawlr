@@ -407,3 +407,28 @@ def test_group_hits_clusters_same_product():
     assert groups[0][0].retailer == "DataBlitz"          # cheapest group first (3200)
     logi = next(g for g in groups if len(g) == 2)
     assert [h.retailer for h in logi] == ["Lazada", "Shopee"]  # cheapest-first within group
+
+
+
+def test_canonical_url_dedup():
+    assert canvas._canonical_url("https://s.com/p/1?a=b#x") == "https://s.com/p/1"
+    h1 = canvas.CanvasHit("S", "x", 1.0, "PHP", "https://s.com/p/1?_psq=a", 1.0, 0.9)
+    h2 = canvas.CanvasHit("S", "x", 1.0, "PHP", "https://s.com/p/1?_psq=b", 1.0, 0.9)
+    assert canvas._dedup_key(h1) == canvas._dedup_key(h2)  # tracking params ignored
+
+
+def test_canvas_drops_zero_price(monkeypatch):
+    mapping = {"amazon": [{"title": "MAD60 HE Keyboard", "price": 0, "currency": "PHP", "url": "/p/1"}]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("mad60 he", retailers=["amazon"], base="PHP", expand=False)
+    hit = next((x for x in report["hits"] if x.title == "MAD60 HE Keyboard"), None)
+    assert hit is not None and hit.price is None and hit.converted is None  # PHP 0 ignored
+
+
+def test_titles_not_over_grouped():
+    H = canvas.CanvasHit
+    hits = [
+        H("A", "Logitech G502 X Gaming Mouse", 1.0, "PHP", "u1", 1.0, 0.9),
+        H("B", "Logitech G Pro X Superlight", 2.0, "PHP", "u2", 2.0, 0.9),
+    ]
+    assert len(canvas.group_hits(hits)) == 2  # different models stay separate

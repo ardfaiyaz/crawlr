@@ -512,7 +512,7 @@ def _country_currency(country: str | None) -> str | None:
     return _COUNTRY_CCY.get(country) if country else None
 
 # Minimum title-similarity for a search result to count as "the product".
-_MATCH_THRESHOLD = 0.3
+_MATCH_THRESHOLD = 0.4
 
 
 def _load_user_retailers() -> dict[str, Retailer]:
@@ -711,7 +711,8 @@ _JUNK_RE = re.compile(
     r"related searches|filters?|sort by|categories?|see all|view all|"
     r"best sellers?|recommended|you may also|price|shop by)\b"
     r"|results? for\b|search results?\b|view all\b|\bads? in\b|\ball listings\b"
-    r"|\bbrowse\b|for sale in\b",
+    r"|\bbrowse\b|for sale in\b|doesn't (?:seem to )?exist|page not found"
+    r"|\bnot found\b|\b404\b",
     re.IGNORECASE,
 )
 
@@ -741,6 +742,17 @@ def _is_junk_title(title: str | None) -> bool:
     return bool(_JUNK_RE.search(t))
 
 
+def _canonical_url(url: object) -> str:
+    """Drop query string + fragment so the same product reached via different
+    tracking params (?_psq=…, ?_pos=…) dedupes to one listing."""
+    if not url:
+        return ""
+    from urllib.parse import urlsplit, urlunsplit
+
+    p = urlsplit(str(url))
+    return urlunsplit((p.scheme, p.netloc, p.path.rstrip("/"), "", ""))
+
+
 def _links_to_product(rec_url: object, search_url: str | None) -> bool:
     """A real listing links to a *distinct* detail page — not back to the search
     page (or just a #fragment of it, or nowhere)."""
@@ -762,7 +774,10 @@ def _score(query: str, title: str | None) -> float:
     if not title:
         return 0.0
     q, t = _norm(query), _norm(title)
-    words = [w for w in re.split(r"\W+", q) if w]
+    # Ignore 1-char tokens ("g", "x") — they match noisily and inflate overlap.
+    words = [w for w in re.split(r"\W+", q) if len(w) > 1]
+    if not words:
+        words = [w for w in re.split(r"\W+", q) if w]
     ratio = difflib.SequenceMatcher(None, q, t).ratio()
     if not words:
         return round(ratio, 4)
@@ -791,7 +806,7 @@ def _top_matches(
             score += 0.05
         if score < _MATCH_THRESHOLD:
             continue
-        key = (title.lower(), rec.get("url"))
+        key = (title.lower(), _canonical_url(rec.get("url")))
         if key in seen:
             continue
         seen.add(key)
@@ -836,21 +851,24 @@ def _jsonld_products(html: str, base_url: str) -> list[dict]:
 
 def _search_one(
     retailer: Retailer,
-    query: str,
+    search_query: str,
+    score_query: str,
     base_ccy: str,
     rates: dict,
     per_store: int,
     force_js: bool,
 ) -> tuple[str, list[CanvasHit]]:
-    """Search a single retailer. Returns ``(status, hits)`` where status is one
-    of ``ok`` / ``blocked`` / ``error`` / ``nomatch``. Never raises."""
-    url = retailer.search_url.format(q=quote_plus(query))
+    """Search a single retailer for ``search_query`` but rank/keep results by
+    similarity to ``score_query`` (the user's original query), so expanded
+    variants widen coverage without dragging in off-target products. Returns
+    ``(status, hits)`` — status is ok/blocked/error/nomatch. Never raises."""
+    url = retailer.search_url.format(q=quote_plus(search_query))
 
     # 1) Prefer the store's structured JSON API (reliable products + prices).
     records: list[dict] = []
     if retailer.adapter is not None:
         try:
-            records = retailer.adapter(query) or []
+            records = retailer.adapter(search_query) or []
         except Exception as exc:  # API changed / blocked -> fall back to HTML
             logger.info("Canvas: %s API adapter failed (%s); trying HTML", retailer.name, exc)
             records = []
@@ -870,9 +888,11 @@ def _search_one(
         records = _jsonld_products(getattr(result, "html", "") or "", result.url) + result.records
 
     hits: list[CanvasHit] = []
-    for match in _top_matches(query, records, per_store, search_url=url):
+    for match in _top_matches(score_query, records, per_store, search_url=url):
         rec = match["rec"]
-        price = rec.get("price") if isinstance(rec.get("price"), (int, float)) else None
+        raw_price = rec.get("price")
+        # Ignore non-positive prices (e.g. a Shopify "0.00" placeholder).
+        price = float(raw_price) if isinstance(raw_price, (int, float)) and raw_price > 0 else None
         native_ccy = rec.get("currency")
         converted = currency.convert(price, native_ccy or base_ccy, base_ccy, rates)
         orig = rec.get("original_price") if isinstance(rec.get("original_price"), (int, float)) else None
@@ -882,7 +902,7 @@ def _search_one(
         hits.append(
             CanvasHit(
                 retailer=retailer.name,
-                title=match.get("title") or _clean_title(rec.get("title")) or query,
+                title=match.get("title") or _clean_title(rec.get("title")) or score_query,
                 price=price,
                 currency=native_ccy,
                 url=urljoin(url, rec.get("url")) if rec.get("url") else url,
@@ -927,7 +947,7 @@ def _expand_query(query: str) -> list[str]:
 
 
 def _dedup_key(h: CanvasHit) -> tuple:
-    return (h.retailer.lower(), (h.url or "").lower() or _norm(h.title))
+    return (h.retailer.lower(), _canonical_url(h.url) or _norm(h.title))
 
 
 def _sort_hits(hits: list[CanvasHit], sort: str) -> list[CanvasHit]:
@@ -953,13 +973,18 @@ def _sort_hits(hits: list[CanvasHit], sort: str) -> list[CanvasHit]:
 
 
 def _titles_similar(a: str, b: str) -> bool:
-    """True if two normalized titles likely name the same product."""
+    """True if two normalized titles likely name the *same* product. Kept tight
+    so different models (G502 vs G Pro X) don't get lumped together."""
     if a == b:
         return True
-    ta, tb = set(a.split()), set(b.split())
-    if ta and tb and len(ta & tb) / min(len(ta), len(tb)) >= 0.6:
-        return True
-    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.75
+    # One title fully contains the other's significant words (variant naming).
+    sa = [w for w in a.split() if len(w) > 1]
+    sb = [w for w in b.split() if len(w) > 1]
+    if sa and sb:
+        shorter, longer = (sa, b) if len(sa) <= len(sb) else (sb, a)
+        if all(w in longer for w in shorter):
+            return True
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.82
 
 
 def group_hits(hits: list[CanvasHit]) -> list[list[CanvasHit]]:
@@ -1053,7 +1078,7 @@ def search(
         errored_: list[str] = []
 
         def _run(r: Retailer) -> tuple[Retailer, str, list[CanvasHit]]:
-            status, rhits = _search_one(r, q, base_ccy, rates, per, force_js)
+            status, rhits = _search_one(r, q, query, base_ccy, rates, per, force_js)
             return r, status, rhits
 
         workers = min(len(selected), config.CANVAS_WORKERS) if selected else 1

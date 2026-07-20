@@ -451,6 +451,7 @@ def canvas(
         return
 
     stats = report.get("stats") or {}
+    region_label = f" [{resolved_country.upper()}]" if resolved_country else ""
 
     def _stats_line() -> None:
         if stats:
@@ -464,21 +465,30 @@ def canvas(
                 f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s).[/dim]"
             )
 
-    # Grouped view: the same product across shops, cheapest-first, to compare.
+    # Grouped view: one table, the same product across shops, cheapest-first.
     if group:
         groups = canvas_mod.group_hits(hits)
-        console.print(f"[bold]Canvas: {query}[/bold] — {len(groups)} product(s), {len(hits)} listing(s)")
-        for grp in groups:
+        gtable = Table(
+            "Product", "Retailer", f"Price ({base})", "Rating", "Match",
+            title=f"Canvas: {query}{region_label} — {len(groups)} product(s), {len(hits)} listing(s)",
+        )
+        for gi, grp in enumerate(groups):
+            if gi:
+                gtable.add_section()
             label = min(grp, key=lambda h: len(h.title)).title
-            console.print(f"\n[bold]{_fmt(label)}[/bold]")
-            for h in grp:
+            for row_i, h in enumerate(grp):
+                price_cell = _price(h.converted)
+                if h.discount_pct:
+                    price_cell += f" [green]-{h.discount_pct}%[/green]"
                 badge = " [cyan]✓[/cyan]" if h.official else ""
-                disc = f" [green]-{h.discount_pct}%[/green]" if h.discount_pct else ""
-                console.print(
-                    f"  {h.retailer + badge:<16} {base} {_price(h.converted)}{disc}  "
-                    f"[dim]{h.url}[/dim]"
+                gtable.add_row(
+                    _fmt(label) if row_i == 0 else "",
+                    h.retailer + badge,
+                    price_cell,
+                    f"{h.rating:.1f}★" if h.rating else "-",
+                    f"{h.score:.0%}",
                 )
-        console.print("")
+        console.print(gtable)
         _stats_line()
         return
 
@@ -491,7 +501,6 @@ def canvas(
             return f"{n / 1_000:.1f}k"
         return str(n)
 
-    region_label = f" [{resolved_country.upper()}]" if resolved_country else ""
     table = Table(
         "Retailer", "Product", f"Price ({base})", "Was", "Rating", "Sold", "Match",
         title=f"Canvas: {query}{region_label} (FX: {report['fx_source']})",
