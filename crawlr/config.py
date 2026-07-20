@@ -49,9 +49,36 @@ MIN_FIELD_CONFIDENCE = float(os.getenv("CRAWLR_MIN_FIELD_CONFIDENCE", "0.0"))
 # Anomaly guard: quarantine a price change when it's a statistical outlier vs the
 # item's own history (robust z-score via MAD). 0 disables. The guard only kicks
 # in once there are at least ANOMALY_MIN_SAMPLES prior points, so thin history is
-# never quarantined.
+# never quarantined. These are the *global defaults*; each watch can override
+# them (and RETENTION_RUNS) per-site — see the sites table / `crawlr watch`.
 ANOMALY_ZSCORE = float(os.getenv("CRAWLR_ANOMALY_ZSCORE", "6.0"))
 ANOMALY_MIN_SAMPLES = int(os.getenv("CRAWLR_ANOMALY_MIN_SAMPLES", "6"))
+
+# ---------------------------------------------------------------------------
+# Currency conversion (multi-currency comparison)
+# ---------------------------------------------------------------------------
+
+# Base/reporting currency that mixed-currency comparisons convert into.
+FX_BASE = os.getenv("CRAWLR_FX_BASE", "USD").strip().upper() or "USD"
+
+# When true, refresh FX rates from a public API (cached to disk with a TTL),
+# falling back to the pinned offline table on any failure. Left false, Crawlr
+# converts using the pinned rates only — fully offline and deterministic.
+FX_LIVE = os.getenv("CRAWLR_FX_LIVE", "false").lower() == "true"
+
+# Live FX endpoint. Must return JSON with a top-level {"rates": {CODE: rate}}
+# object expressed as units-per-USD (the open.er-api.com / exchangerate shape).
+FX_API_URL = os.getenv("CRAWLR_FX_API_URL", "https://open.er-api.com/v6/latest/USD")
+
+# How long (hours) a cached live-rate snapshot stays fresh before we refetch.
+FX_CACHE_HOURS = float(os.getenv("CRAWLR_FX_CACHE_HOURS", "12"))
+
+# Cached live-rate snapshot lives alongside the DB / selector cache.
+FX_CACHE_PATH = DATA_DIR / "fx_rates.json"
+
+# Optional pinned-rate overrides, e.g. "EUR=0.92,GBP=0.79" (units per USD).
+# Applied on top of the built-in pinned table; handy for reproducible reports.
+FX_RATES_OVERRIDE = os.getenv("CRAWLR_FX_RATES", "")
 
 # Hosted API: when set, the JSON API requires this key (X-API-Key or Bearer).
 # Left unset, the API is open (fine for local use).

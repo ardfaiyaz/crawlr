@@ -15,6 +15,7 @@ Hardening notes:
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from contextlib import asynccontextmanager
@@ -83,6 +84,10 @@ class WatchRequest(BaseModel):
     trigger: str = "any_change"
     target_price: float | None = None
     interval: int = Field(60, ge=1, le=100_000)
+    # Optional per-site overrides (None -> inherit the global config default).
+    anomaly_zscore: float | None = Field(None, ge=0)
+    anomaly_min_samples: int | None = Field(None, ge=1)
+    retention_runs: int | None = Field(None, ge=0)
 
 
 class HealthOut(BaseModel):
@@ -230,6 +235,9 @@ def api_watch(req: WatchRequest) -> dict:
             interval_minutes=req.interval,
             trigger=trigger,
             target_price=req.target_price,
+            anomaly_zscore=req.anomaly_zscore,
+            anomaly_min_samples=req.anomaly_min_samples,
+            retention_runs=req.retention_runs,
         )
     )
     return {"id": site_id, "url": req.url, "schema": name, "trigger": trigger.value}
@@ -382,6 +390,7 @@ def site_detail(site_id: int) -> HTMLResponse:
     run = storage.latest_run(site_id)
     insights = storage.price_insights(site_id, primary.get("item_key")) if records else _empty_insights()
     avail = storage.availability_stats(site_id, primary.get("item_key")) if records else {}
+    field_sources = _run_field_sources(run)
     return HTMLResponse(
         _render(
             "detail.html",
@@ -391,10 +400,22 @@ def site_detail(site_id: int) -> HTMLResponse:
             run=run,
             insights=insights,
             avail=avail,
+            field_sources=field_sources,
             chart=_chart(values) if len(values) >= 2 else "",
             points=len(values),
         )
     )
+
+
+def _run_field_sources(run: dict | None) -> dict:
+    """Decode the per-field provenance JSON persisted on a run (empty if absent)."""
+    if not run or not run.get("field_sources"):
+        return {}
+    try:
+        parsed = json.loads(run["field_sources"])
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _empty_insights() -> dict:
@@ -741,6 +762,16 @@ _DETAIL = """{% extends "base.html" %}
   <div class="card" style="padding:1rem;">
     {% if chart %}{{ chart | safe }}{% else %}<p class="empty">Not enough data yet — check a few times to build history.</p>{% endif %}
   </div>
+
+  {% if field_sources %}
+  <h2 class="sec">Field provenance</h2>
+  <div class="card" style="padding:1rem;">
+    {% for field, src in field_sources.items() %}
+      <span class="pill {% if src in ('none',) %}off{% endif %}" title="Source of the {{ field }} value">{{ field }}: {{ src }}</span>
+    {% endfor %}
+    <div class="sub" style="margin-top:.6rem;">structured = schema.org data · selector = CSS selector · both = agreed · none = missing</div>
+  </div>
+  {% endif %}
 
   <h2 class="sec">Latest extracted records</h2>
   <div class="card">

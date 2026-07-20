@@ -139,4 +139,10 @@ class MonitoredSite(BaseModel):
     active: bool = True
     trigger: TriggerType = TriggerType.ANY_CHANGE
     target_price: float | None = None
+    # Per-site overrides for the anomaly guard and retention window. None means
+    # "inherit the global default" (config.ANOMALY_ZSCORE / ANOMALY_MIN_SAMPLES /
+    # RETENTION_RUNS), so existing behavior is unchanged unless a site opts in.
+    anomaly_zscore: float | None = None
+    anomaly_min_samples: int | None = None
+    retention_runs: int | None = None
     created_at: datetime = Field(default_factory=_now)

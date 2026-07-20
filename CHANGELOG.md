@@ -41,8 +41,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checks; results now expose `blocked`, `rendered_with_js`, and `content_hash`.
 - **Persisted data-quality** — each run's quality (`verified`/`inferred`/…) is
   stored and shown as a badge in the dashboard watchlist and `/api/watchlist`.
-- **Currency-safe compare** — `crawlr compare` shows currency and never compares
-  across currencies without FX (reports the cheapest per currency instead).
+- **Multi-currency conversion** — `crawlr compare` now converts prices to a
+  common currency (`--to`, or `CRAWLR_FX_BASE`) and picks the cheapest across
+  currencies. A pinned offline rate table ships by default; set
+  `CRAWLR_FX_LIVE=true` for live rates (cached to disk with a TTL, falling back
+  to the pinned table). New `crawlr fx` command lists rates and converts values.
+- **Persisted per-field provenance** — each run's per-field source map
+  (`structured`/`selector`/`both`/`none`) is stored and exposed as
+  `field_sources` in `/api/watchlist` and on the dashboard detail page (not just
+  the record-level quality badge).
+- **Per-site anomaly & retention overrides** — each watch can override the global
+  anomaly z-score, minimum samples, and retention window (`crawlr watch
+  --anomaly-zscore/--anomaly-min-samples/--retention-runs`, or the same fields on
+  `POST /api/watch`); unset fields inherit the global config defaults.
 - **Accuracy gate** — golden-fixture extraction accuracy is asserted in the test
   suite (CI), so it can't silently regress.
 - **Docker** — `Dockerfile`, `docker-compose.yml`, and a GHCR publish workflow

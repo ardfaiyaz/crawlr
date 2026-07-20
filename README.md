@@ -158,6 +158,10 @@ Set via environment variables or a `.env` file:
 | `CRAWLR_ALERT_THROTTLE_MINUTES` | `0` | Suppress repeat alerts within N minutes |
 | `CRAWLR_PROXIES` | — | Comma-separated proxy URLs to rotate |
 | `CRAWLR_RESPECT_ROBOTS` | `true` | Honor robots.txt |
+| `CRAWLR_FX_BASE` | `USD` | Currency that `compare` converts prices into |
+| `CRAWLR_FX_LIVE` | `false` | Fetch live FX rates (cached) instead of the pinned table |
+| `CRAWLR_FX_API_URL` | `open.er-api.com` | Live FX endpoint (`{"rates": {CODE: perUSD}}`) |
+| `CRAWLR_FX_RATES` | — | Pinned rate overrides, e.g. `EUR=0.92,GBP=0.79` |
 
 ## Examples
 

@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS sites (
     active INTEGER NOT NULL DEFAULT 1,
     alert_trigger TEXT NOT NULL DEFAULT 'any_change',
     target_price REAL,
+    anomaly_zscore REAL,
+    anomaly_min_samples INTEGER,
+    retention_runs INTEGER,
     created_at TEXT NOT NULL,
     UNIQUE(url, schema_name)
 );
@@ -51,7 +54,8 @@ CREATE TABLE IF NOT EXISTS runs (
     used_llm INTEGER NOT NULL DEFAULT 0,
     confidence REAL NOT NULL DEFAULT 1.0,
     quality TEXT NOT NULL DEFAULT 'unknown',
-    content_hash TEXT
+    content_hash TEXT,
+    field_sources TEXT
 );
 CREATE TABLE IF NOT EXISTS records (
     id {_PK},
@@ -173,8 +177,12 @@ def init_schema(conn) -> None:
 _MIGRATIONS = [
     ("sites", "alert_trigger", "TEXT NOT NULL DEFAULT 'any_change'"),
     ("sites", "target_price", "REAL"),
+    ("sites", "anomaly_zscore", "REAL"),
+    ("sites", "anomaly_min_samples", "INTEGER"),
+    ("sites", "retention_runs", "INTEGER"),
     ("runs", "quality", "TEXT NOT NULL DEFAULT 'unknown'"),
     ("runs", "content_hash", "TEXT"),
+    ("runs", "field_sources", "TEXT"),
 ]
 
 

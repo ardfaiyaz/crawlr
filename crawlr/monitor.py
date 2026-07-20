@@ -116,7 +116,14 @@ def run_once(
         key_field=key_field,
         quality=result.quality,
         content_hash=getattr(result, "content_hash", None),
+        field_source=getattr(result, "field_source", None),
     )
+
+    # Resolve the effective anomaly / retention settings for this site: a per-site
+    # override wins, otherwise fall back to the global config default.
+    anomaly_z = _effective(site.get("anomaly_zscore"), config.ANOMALY_ZSCORE)
+    anomaly_min = int(_effective(site.get("anomaly_min_samples"), config.ANOMALY_MIN_SAMPLES))
+    retention_runs = int(_effective(site.get("retention_runs"), config.RETENTION_RUNS))
 
     # Stale-page detection: identical content since last check. Diffing will find
     # no changes anyway, so surface it as a note rather than doing extra work.
@@ -137,8 +144,8 @@ def run_once(
             ]
         # Anomaly guard: quarantine statistically wild price moves (robust z-score
         # vs the item's own history) so a glitch can't poison alerts or history.
-        if config.ANOMALY_ZSCORE > 0 and changes:
-            changes = _drop_anomalies(site_id, changes, result)
+        if anomaly_z > 0 and changes:
+            changes = _drop_anomalies(site_id, changes, result, anomaly_z, anomaly_min)
         storage.record_changes(site_id, changes)
         if send_alerts and changes:
             # Only alert on changes matching the site's trigger / rules template.
@@ -162,14 +169,23 @@ def run_once(
 
     # Cap stored history per site when a retention window is configured. Runs
     # after diffing/recording so change detection always sees the prior run.
-    if config.RETENTION_RUNS > 0:
-        storage.prune_site_runs(site_id, config.RETENTION_RUNS)
+    if retention_runs > 0:
+        storage.prune_site_runs(site_id, retention_runs)
 
     return result, changes
 
 
+def _effective(override, default):
+    """Return a per-site override when set, else the global default."""
+    return default if override is None else override
+
+
 def _drop_anomalies(
-    site_id: int, changes: list[PriceChange], result: ExtractionResult
+    site_id: int,
+    changes: list[PriceChange],
+    result: ExtractionResult,
+    z_threshold: float,
+    min_samples: int,
 ) -> list[PriceChange]:
     """Filter out price changes whose new value is a statistical outlier."""
     kept: list[PriceChange] = []
@@ -180,9 +196,7 @@ def _drop_anomalies(
                 p["value"] for p in storage.price_history(site_id, c.product_url, "price")
             ][:-1]
             new_value = normalize.normalize_number(c.new_value)
-            if anomaly.is_price_outlier(
-                new_value, history, config.ANOMALY_ZSCORE, config.ANOMALY_MIN_SAMPLES
-            ):
+            if anomaly.is_price_outlier(new_value, history, z_threshold, min_samples):
                 result.warnings.append(
                     f"Quarantined anomalous price {c.new_value} for {c.product_url}"
                 )

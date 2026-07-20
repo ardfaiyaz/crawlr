@@ -43,11 +43,15 @@ def add_site(site: MonitoredSite) -> int:
         site_id = db.insert_returning_id(
             conn,
             """INSERT INTO sites
-               (url, schema_name, interval_minutes, active, alert_trigger, target_price, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+               (url, schema_name, interval_minutes, active, alert_trigger, target_price,
+                anomaly_zscore, anomaly_min_samples, retention_runs, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(url, schema_name) DO UPDATE SET
                  interval_minutes=excluded.interval_minutes, active=excluded.active,
-                 alert_trigger=excluded.alert_trigger, target_price=excluded.target_price""",
+                 alert_trigger=excluded.alert_trigger, target_price=excluded.target_price,
+                 anomaly_zscore=excluded.anomaly_zscore,
+                 anomaly_min_samples=excluded.anomaly_min_samples,
+                 retention_runs=excluded.retention_runs""",
             (
                 str(site.url),
                 site.schema_name,
@@ -55,6 +59,9 @@ def add_site(site: MonitoredSite) -> int:
                 int(site.active),
                 trigger_value,
                 site.target_price,
+                site.anomaly_zscore,
+                site.anomaly_min_samples,
+                site.retention_runs,
                 _now_iso(),
             ),
         )
@@ -171,17 +178,19 @@ def record_run(
     key_field: str | None = None,
     quality: str = "unknown",
     content_hash: str | None = None,
+    field_source: dict | None = None,
 ) -> int:
     ts = fetched_at or _now_iso()
+    field_sources_json = json.dumps(field_source) if field_source else None
     with db.connect() as conn:
         run_id = db.insert_returning_id(
             conn,
             """INSERT INTO runs
                (site_id, fetched_at, record_count, healed, used_llm, confidence, quality,
-                content_hash)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                content_hash, field_sources)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (site_id, ts, len(records), int(healed), int(used_llm), float(confidence), quality,
-             content_hash),
+             content_hash, field_sources_json),
         )
         if run_id is None:
             raise RuntimeError("failed to record run (no insert id returned)")
@@ -479,6 +488,9 @@ def watchlist() -> list[dict]:
                 "active": site["active"],
                 "alert_trigger": trigger,
                 "target_price": target,
+                "anomaly_zscore": site.get("anomaly_zscore"),
+                "anomaly_min_samples": site.get("anomaly_min_samples"),
+                "retention_runs": site.get("retention_runs"),
                 "item_key": current.get("item_key"),
                 "title": current.get("title") or current.get("item_key"),
                 "price": price,
@@ -496,11 +508,28 @@ def watchlist() -> list[dict]:
                 "deal_score": stats["deal_score"],
                 "confidence": run["confidence"] if run else None,
                 "quality": run.get("quality") if run else None,
+                # Per-field provenance ("structured"|"selector"|"both"|"none") from
+                # the latest run's consensus layer, persisted per watch.
+                "field_sources": _parse_field_sources(run),
                 "last_checked": run["fetched_at"] if run else None,
                 "status": triggers.watch_status(price, in_stock, prev_price, trigger, target),
             }
         )
     return rows
+
+
+def _parse_field_sources(run: dict | None) -> dict:
+    """Decode the JSON per-field provenance stored on a run (empty if absent)."""
+    if not run:
+        return {}
+    raw = run.get("field_sources")
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 

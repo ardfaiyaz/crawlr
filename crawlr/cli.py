@@ -127,6 +127,15 @@ def watch(
     ),
     interval: int = typer.Option(60, help="Check interval in minutes"),
     schema: str = typer.Option(None, help="Schema (omit to auto-detect; defaults toward product)"),
+    anomaly_zscore: float = typer.Option(
+        None, help="Per-site anomaly z-score threshold (0 disables; omit = global default)"
+    ),
+    anomaly_min_samples: int = typer.Option(
+        None, help="Per-site min history samples before the anomaly guard applies"
+    ),
+    retention_runs: int = typer.Option(
+        None, help="Per-site retention: keep at most N recent runs (0 = keep all)"
+    ),
 ) -> None:
     """Watch a product's price and stock (the easy way)."""
     storage.init_db()
@@ -149,6 +158,9 @@ def watch(
             interval_minutes=interval,
             trigger=chosen,
             target_price=target,
+            anomaly_zscore=anomaly_zscore,
+            anomaly_min_samples=anomaly_min_samples,
+            retention_runs=retention_runs,
         )
     )
     extra = f", target ${target}" if target is not None else ""
@@ -226,43 +238,102 @@ def compare(
     urls: list[str] = typer.Argument(..., help="Two or more URLs to compare"),
     schema: str = typer.Option(None, help="Schema (omit to auto-detect each URL)"),
     js: bool = typer.Option(False, help="Force JS rendering"),
+    to: str = typer.Option(
+        None, "--to", help="Convert all prices to this currency (default: CRAWLR_FX_BASE)"
+    ),
 ) -> None:
-    """One-shot price comparison across several URLs for the same product."""
+    """One-shot price comparison across several URLs for the same product.
+
+    Prices in different currencies are converted to a common currency (``--to``,
+    or ``CRAWLR_FX_BASE``) so the cheapest option is picked across currencies.
+    Conversion uses a pinned offline rate table by default; set
+    ``CRAWLR_FX_LIVE=true`` for live rates.
+    """
+    from . import config, currency
     from .extractor import scrape as do_scrape
 
     _mode_banner()
-    table = Table("URL", "Title", "Price", "Currency", "Stock", "Confidence", title="Price comparison")
-    priced: list[tuple[str, float, str | None]] = []
+    base = (to or config.FX_BASE).upper()
+    rates, source = currency.get_rates()
+    console.print(f"[dim]Converting to {base} · FX source: {source}[/dim]")
+
+    table = Table(
+        "URL", "Title", "Price", "Currency", f"In {base}", "Stock", "Confidence",
+        title="Price comparison",
+    )
+    # (url, native_price, native_ccy, converted_price_or_None)
+    priced: list[tuple[str, float, str | None, float | None]] = []
     for url in urls:
         result = do_scrape(url, _resolve_or_detect(schema, url, js), force_js=js)
         rec = result.records[0] if result.records else {}
         price = rec.get("price")
-        currency = rec.get("currency")
+        native_ccy = rec.get("currency")
+        converted = None
         if isinstance(price, (int, float)):
-            priced.append((url, float(price), currency))
+            # Assume the base currency when a page omits an explicit currency.
+            src_ccy = native_ccy or base
+            converted = currency.convert(float(price), src_ccy, base, rates)
+            priced.append((url, float(price), native_ccy, converted))
         table.add_row(
-            _fmt(url), _fmt(rec.get("title")), _price(price), currency or "-",
-            _stock(triggers.is_in_stock(rec.get("availability"))),
+            _fmt(url), _fmt(rec.get("title")), _price(price), native_ccy or "-",
+            _price(converted), _stock(triggers.is_in_stock(rec.get("availability"))),
             f"{result.confidence:.0%}",
         )
     console.print(table)
     if len(priced) < 2:
         return
-    currencies = {c for _, _, c in priced if c}
-    if len(currencies) > 1:
-        # Never compare across currencies (no FX) — report the cheapest per currency.
-        console.print("[yellow]Mixed currencies — comparing within each currency.[/yellow]")
+
+    convertible = [(u, p, c, conv) for (u, p, c, conv) in priced if conv is not None]
+    unconvertible = [c or "?" for (_, _, c, conv) in priced if conv is None]
+    if len(convertible) >= 2:
+        best_url, best_native, best_ccy, best_conv = min(convertible, key=lambda x: x[3])
+        console.print(
+            f"[green]Cheapest:[/green] {best_url} at {best_native:g} "
+            f"{best_ccy or base} (= {best_conv:g} {base})"
+        )
+        if unconvertible:
+            console.print(
+                f"[yellow]No FX rate for: {', '.join(sorted(set(unconvertible)))} "
+                f"— excluded from the cross-currency ranking.[/yellow]"
+            )
+    else:
+        # Not enough convertible prices — fall back to per-currency cheapest.
+        console.print("[yellow]Not enough convertible prices — comparing within each currency.[/yellow]")
         by_currency: dict[str, list[tuple[str, float]]] = {}
-        for u, p, c in priced:
+        for u, p, c, _ in priced:
             by_currency.setdefault(c or "?", []).append((u, p))
         for cur, items in by_currency.items():
             u, p = min(items, key=lambda x: x[1])
             console.print(f"[green]Cheapest ({cur}):[/green] {u} at {p:g}")
-    else:
-        best_url, best_price, best_cur = min(priced, key=lambda x: x[1])
+
+
+@app.command()
+def fx(
+    amount: float = typer.Option(None, help="Amount to convert (omit to just list rates)"),
+    from_ccy: str = typer.Option(None, "--from", help="Source currency code"),
+    to_ccy: str = typer.Option(None, "--to", help="Target currency code (default: CRAWLR_FX_BASE)"),
+) -> None:
+    """Show FX rates, or convert an amount between currencies."""
+    from . import config, currency
+
+    rates, source = currency.get_rates()
+    target = (to_ccy or config.FX_BASE).upper()
+
+    if amount is not None and from_ccy:
+        converted = currency.convert(amount, from_ccy, target, rates)
+        if converted is None:
+            console.print(f"[red]No FX rate for {from_ccy.upper()} or {target}.[/red]")
+            raise typer.Exit(code=1)
         console.print(
-            f"[green]Cheapest:[/green] {best_url} at {best_price:g} {best_cur or ''}".rstrip()
+            f"[green]{amount:g} {from_ccy.upper()} = {converted:g} {target}[/green] "
+            f"[dim](source: {source})[/dim]"
         )
+        return
+
+    table = Table("Currency", "Units per 1 USD", title=f"FX rates (source: {source})")
+    for code in sorted(rates):
+        table.add_row(code, f"{rates[code]:g}")
+    console.print(table)
 
 
 @app.command()
