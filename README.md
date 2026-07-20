@@ -182,7 +182,30 @@ Then `crawlr scrape <url> --schema jobs`. List schemas with `crawlr schemas`.
 
 ## Configuration
 
-Set via environment variables or a `.env` file:
+Crawlr is configured with **environment variables**. Set them whichever way suits you:
+
+| Where | How |
+|-------|-----|
+| macOS / Linux | `export CRAWLR_LLM_PROVIDER=openai` |
+| Windows PowerShell | `$env:CRAWLR_LLM_PROVIDER="openai"` |
+| A `.env` file | add `CRAWLR_LLM_PROVIDER=openai` in your project folder (loaded automatically) |
+
+A couple of quick examples:
+
+```bash
+# Turn on AI mode for higher accuracy (optional — free heuristic is the default)
+export CRAWLR_LLM_PROVIDER="openai"
+export CRAWLR_LLM_API_KEY="sk-..."
+
+# Get Discord alerts, then verify they arrive
+export CRAWLR_ALERT_DISCORD="https://discord.com/api/webhooks/..."
+crawlr test-alert
+```
+
+> A step-by-step version of every setting — grouped by task, with examples — lives in the
+> [website docs](https://01crawlr.vercel.app/docs.html#config).
+
+Full reference:
 
 | Variable | Default | Description |
 |----------|---------|-------------|

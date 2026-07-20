@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Crawlr — Documentation</title>
-  <meta name="description" content="Full documentation for Crawlr: install, commands, self-healing extraction, triggers, rules, schemas, alerts, hosted API, configuration, and deployment.">
+  <meta name="description" content="Beginner-friendly Crawlr docs: install, quickstart, every command and option explained with examples, step-by-step configuration, custom schemas, alerts, currency, fetch providers, canvas, and deployment.">
   <meta name="theme-color" content="#2a6833">
   <link rel="icon" href="favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="favicon.png">
@@ -34,126 +34,315 @@
   <div class="wrap doc-layout">
     <aside class="doc-side">
       <h5>Getting started</h5>
-      <a href="#overview">Overview</a>
-      <a href="#install">Install</a>
-      <a href="#quickstart">Quickstart</a>
-      <h5>Concepts</h5>
+      <a href="#overview">What is Crawlr?</a>
+      <a href="#install">1. Install</a>
+      <a href="#quickstart">2. Your first watch</a>
       <a href="#how-it-works">How it works</a>
-      <a href="#self-healing">Self-healing</a>
-      <a href="#confidence">Confidence &amp; validation</a>
-      <h5>Using Crawlr</h5>
+      <h5>Commands &amp; options</h5>
       <a href="#commands">Command reference</a>
-      <a href="#watch">Watch &amp; watchlist</a>
+      <a href="#watch-options">Watch options</a>
       <a href="#triggers">Alert triggers</a>
+      <a href="#recipes">Recipes</a>
+      <a href="#canvas">Canvas (shop by name)</a>
+      <h5>Configuration</h5>
+      <a href="#config">How settings work</a>
+      <a href="#config-ai">AI mode (LLM)</a>
+      <a href="#config-alerts">Alerts &amp; notifications</a>
+      <a href="#config-fx">Currency conversion</a>
+      <a href="#config-provider">Fetch providers</a>
+      <a href="#config-antibot">Anti-bot &amp; robots</a>
+      <a href="#config-storage">Storage &amp; Postgres</a>
+      <a href="#config-reference">Full reference</a>
+      <h5>Going further</h5>
+      <a href="#schemas">Custom schemas</a>
       <a href="#rules">Rules template</a>
-      <a href="#schemas">Schemas &amp; verticals</a>
-      <a href="#alerts">Alerts &amp; digests</a>
       <a href="#api">Hosted API</a>
-      <h5>Operate</h5>
-      <a href="#config">Configuration</a>
-      <a href="#storage">Storage</a>
-      <a href="#reliability">Reliability</a>
       <a href="#deploy">Deploy</a>
       <a href="#legal">Legal &amp; ethics</a>
     </aside>
 
     <main class="doc-main">
       <h1>Documentation</h1>
+      <p class="lead">Everything you need, explained simply — with a copy-paste example for every
+      step. New here? Do <a href="#install">Install</a> then <a href="#quickstart">Your first
+      watch</a> and you'll be monitoring a price in under two minutes.</p>
 
-      <h2 id="overview">Overview</h2>
-      <p>Crawlr is a command-line, AI-powered <strong>self-healing</strong> web scraper for
-      e-commerce price and stock monitoring. Most "AI scrapers" send every page to an LLM —
-      slow, expensive, and non-deterministic. Crawlr instead uses an LLM (or a free offline
-      heuristic) <strong>only to generate and repair CSS selectors</strong>, then extracts pages
-      deterministically with those cached selectors. When a site's markup changes and the
-      selectors break, Crawlr detects it and regenerates them automatically.</p>
+      <h2 id="overview">What is Crawlr?</h2>
+      <p>Crawlr is a command-line tool that <strong>watches product pages and tells you when the
+      price or stock changes</strong>. Point it at a link, pick when you want to be alerted, and it
+      keeps checking for you.</p>
+      <p>Under the hood it's a <strong>self-healing</strong> scraper: it uses AI (or a free offline
+      method) <em>only</em> to work out the right CSS selectors once, then reuses them — fast and
+      free. If a site changes its layout and extraction breaks, Crawlr notices and fixes the
+      selectors automatically, so your monitoring doesn't silently die.</p>
 
-      <h2 id="install">Install</h2>
-      <p>Requires Python 3.10+.</p>
+      <h2 id="install">1. Install</h2>
+      <p>You need Python 3.10 or newer. Install with <code>pipx</code> (recommended) or <code>pip</code>:</p>
       <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">pipx install crawlr</span>        <span class="c"># or: pip install crawlr</span></pre></div>
-      <p>Optional extras:</p>
-      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">pip install "crawlr[js]"</span> && playwright install chromium   <span class="c"># JS-heavy sites</span>
-<span class="p">pip install "crawlr[postgres]"</span>                            <span class="c"># Postgres backend</span></pre></div>
+      <p>Optional add-ons, only if you need them:</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">pip install "crawlr[js]"</span> && playwright install chromium   <span class="c"># JavaScript-heavy sites</span>
+<span class="p">pip install "crawlr[postgres]"</span>                            <span class="c"># use Postgres instead of SQLite</span></pre></div>
+      <p>Check everything works:</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr doctor</span></pre></div>
 
-      <h2 id="quickstart">Quickstart</h2>
-      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr watch "https://store.example/product/123" --target 25</span>
+      <h2 id="quickstart">2. Your first watch</h2>
+      <p>Three steps: watch a product, see your list, then let it keep checking.</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="c"># Step 1 — start watching (alert me at/below $25). Schema is auto-detected.</span>
+<span class="p">crawlr watch "https://store.example/product/123" --target 25</span>
+
+<span class="c"># Step 2 — see current price, movement, stock, and status</span>
 <span class="p">crawlr watchlist</span>
-<span class="p">crawlr monitor --daemon</span>
-<span class="p">crawlr doctor</span>          <span class="c"># verify your setup</span></pre></div>
+
+<span class="c"># Step 3 — keep checking in the background (or use cron)</span>
+<span class="p">crawlr monitor --daemon</span></pre></div>
+      <p>New to scraping? Try it first on a scrape-friendly demo site to see it work end-to-end:</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr watch "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html" --target 60</span>
+<span class="p">crawlr watchlist</span>
+<span class="p">crawlr monitor</span></pre></div>
 
       <h2 id="how-it-works">How it works</h2>
       <p>Every scrape flows through a layered pipeline where each stage cross-checks the next:</p>
       <ol>
-        <li><strong>Fetch</strong> — static HTTP with retries; auto-escalates to a headless browser for JS-heavy pages. Proxy rotation, robots.txt compliance, and request jitter are applied.</li>
-        <li><strong>Structured data</strong> — reads schema.org <code>JSON-LD</code>, microdata, and OpenGraph tags. This is the most reliable, redesign-proof source.</li>
-        <li><strong>Selectors</strong> — cached CSS selectors (generated once per site) extract deterministically; they self-heal when they break.</li>
-        <li><strong>Consensus</strong> — structured data and selector output are merged; disagreements defer to structured data for numeric fields, and each field gets a confidence score.</li>
-        <li><strong>Validate</strong> — types and required fields are checked, plus a plausibility guard that rejects absurd values (e.g. a 100× price jump).</li>
+        <li><strong>Fetch</strong> — static HTTP with retries; escalates to a headless browser (or a fetch provider) for hard pages. Honors robots.txt and rate limits.</li>
+        <li><strong>Structured data</strong> — reads schema.org <code>JSON-LD</code>, microdata, and OpenGraph — the most reliable, redesign-proof source.</li>
+        <li><strong>Selectors</strong> — cached CSS selectors extract deterministically and self-heal when they break.</li>
+        <li><strong>Fallbacks</strong> — if those miss, page-level heuristics still find the title/price/stock (even a currency-tagged number in the text).</li>
+        <li><strong>Consensus &amp; validate</strong> — sources are merged, disagreements resolved, types checked, and absurd values (e.g. a 100× jump) rejected.</li>
         <li><strong>Alert</strong> — only real, meaningful changes reach you, via the trigger you chose.</li>
       </ol>
 
-      <h2 id="self-healing">Self-healing</h2>
-      <p>The LLM/heuristic runs <em>once per site</em> to produce reusable selectors, which are
-      cached (by host + schema, and by page-content hash). On later runs Crawlr extracts with the
-      cached selectors — fast and free. If the required fields come back empty (the site changed
-      its markup), Crawlr regenerates the selectors and retries automatically. That's why your
-      monitoring doesn't silently die after a redesign.</p>
-
-      <h2 id="confidence">Confidence &amp; validation</h2>
-      <p>On single-product pages, Crawlr cross-checks structured data against selector output and
-      assigns a <strong>per-field confidence</strong> (agreement = high, one source = medium,
-      disagreement = low). The overall run confidence is surfaced in the CLI and dashboard. A
-      <strong>plausibility guard</strong> suppresses implausible price moves so extraction glitches
-      don't fire false alerts. You can require a minimum field confidence before alerting with
-      <code>CRAWLR_MIN_FIELD_CONFIDENCE</code>.</p>
-
       <h2 id="commands">Command reference</h2>
+      <p>The commands you'll actually use. The <code>&lt;id&gt;</code> numbers come from
+      <code>crawlr watchlist</code> or <code>crawlr sites</code>.</p>
       <table>
-        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <thead><tr><th>Command</th><th>What it does</th></tr></thead>
         <tbody>
-          <tr><td><code>crawlr watch &lt;url&gt;</code></td><td>Track a product's price &amp; stock (easy path)</td></tr>
-          <tr><td><code>crawlr watchlist</code></td><td>Show current price, movement, stock, status</td></tr>
-          <tr><td><code>crawlr scrape &lt;url&gt;</code></td><td>One-off scrape against a schema</td></tr>
-          <tr><td><code>crawlr monitor [--daemon]</code></td><td>Run due sites once, or continuously</td></tr>
-          <tr><td><code>crawlr sites</code> / <code>run &lt;id&gt;</code></td><td>List monitored sites / run one now</td></tr>
-          <tr><td><code>crawlr changes</code></td><td>Recent detected changes</td></tr>
-          <tr><td><code>crawlr digest [--send]</code></td><td>Summarize all changes over a window</td></tr>
-          <tr><td><code>crawlr schemas</code> / <code>validate-schema</code></td><td>List schemas / validate a YAML file</td></tr>
-          <tr><td><code>crawlr init</code></td><td>Create the rules template</td></tr>
-          <tr><td><code>crawlr stats</code></td><td>Per-site runs, avg confidence, self-heals</td></tr>
-          <tr><td><code>crawlr export --format json|csv</code></td><td>Export watchlist data</td></tr>
-          <tr><td><code>crawlr replay &lt;url&gt;</code></td><td>Re-extract from the archived snapshot (offline)</td></tr>
-          <tr><td><code>crawlr eval</code></td><td>Run the accuracy regression gate</td></tr>
-          <tr><td><code>crawlr doctor</code></td><td>Environment health check</td></tr>
-          <tr><td><code>crawlr test-alert</code></td><td>Send a test alert to configured sinks</td></tr>
-          <tr><td><code>crawlr serve</code></td><td>Launch the dashboard + JSON API</td></tr>
+          <tr><td><code>crawlr watch &lt;url&gt;</code></td><td>Start tracking a product or store page</td></tr>
+          <tr><td><code>crawlr watchlist</code></td><td>Show everything you track: price, change, stock, status</td></tr>
+          <tr><td><code>crawlr monitor</code></td><td>Check all due pages <strong>once</strong>, right now</td></tr>
+          <tr><td><code>crawlr monitor --daemon</code></td><td>Keep checking forever in the background</td></tr>
+          <tr><td><code>crawlr compare &lt;url&gt; &lt;url&gt; …</code></td><td>One-off price comparison across several links</td></tr>
+          <tr><td><code>crawlr canvas "&lt;product&gt;"</code></td><td>Search many stores by product name and compare prices</td></tr>
+          <tr><td><code>crawlr insights &lt;id&gt;</code></td><td>Price analytics: all-time low/high, average, "deal score"</td></tr>
+          <tr><td><code>crawlr pause &lt;id&gt;</code> / <code>resume &lt;id&gt;</code></td><td>Temporarily stop / restart tracking one item</td></tr>
+          <tr><td><code>crawlr unwatch &lt;id&gt;</code></td><td>Stop tracking an item and delete its history</td></tr>
+          <tr><td><code>crawlr scrape &lt;url&gt;</code></td><td>One-off scrape (no monitoring) — great for testing</td></tr>
+          <tr><td><code>crawlr fx</code></td><td>Show currency rates, or convert an amount</td></tr>
+          <tr><td><code>crawlr serve</code></td><td>Open the web dashboard at <code>http://localhost:8000</code></td></tr>
+          <tr><td><code>crawlr doctor</code></td><td>Check that your setup works</td></tr>
+          <tr><td><code>crawlr test-alert</code></td><td>Send a test notification so you know alerts reach you</td></tr>
         </tbody>
       </table>
 
-      <h2 id="watch">Watch &amp; watchlist</h2>
-      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr watch "https://store/p/1"</span>              <span class="c"># track price + stock</span>
-<span class="p">crawlr watch "https://store/p/1" --target 25</span>  <span class="c"># alert at/below $25</span>
-<span class="p">crawlr watch "https://store/p/1" --restock</span>    <span class="c"># alert when back in stock</span>
-<span class="p">crawlr watch "https://store/p/1" --interval 30</span> <span class="c"># check every 30 min</span></pre></div>
-      <p><code>crawlr watchlist</code> shows current price, previous price, % change, stock, target,
-      and status for every watch.</p>
+      <h2 id="watch-options">Watch options</h2>
+      <p>Add these flags to <code>crawlr watch &lt;url&gt;</code> to control what it does:</p>
+      <table>
+        <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>--target 500</code></td><td>Ping me when the price drops to <strong>500 or below</strong> (also sets the trigger to <code>price_below</code>)</td></tr>
+          <tr><td><code>--restock</code></td><td>Ping me when the item goes from <strong>out of stock → in stock</strong></td></tr>
+          <tr><td><code>--trigger &lt;name&gt;</code></td><td>Choose exactly <em>when</em> to be alerted (see triggers below)</td></tr>
+          <tr><td><code>--interval 60</code></td><td>Check this page <strong>every 60 minutes</strong> (default: 60)</td></tr>
+          <tr><td><code>--schema &lt;name&gt;</code></td><td>Force the page type instead of auto-detecting: <code>product</code>, <code>product_list</code>, <code>jobs</code>, <code>real_estate</code>, <code>news</code></td></tr>
+        </tbody>
+      </table>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="c"># "Tell me when this drops to 25 or lower, checking every 30 minutes"</span>
+<span class="p">crawlr watch "https://store/p/1" --target 25 --interval 30</span></pre></div>
 
       <h2 id="triggers">Alert triggers</h2>
+      <p>Pick one per watch with <code>--trigger</code> (or in the dashboard). In plain English:</p>
       <table>
-        <thead><tr><th>Trigger</th><th>Alerts when</th></tr></thead>
+        <thead><tr><th>Trigger</th><th>Alerts you when…</th></tr></thead>
         <tbody>
-          <tr><td><code>any_change</code></td><td>any watched field changes</td></tr>
-          <tr><td><code>price_drop</code></td><td>the price goes down</td></tr>
-          <tr><td><code>price_below</code></td><td>price is at/below your target</td></tr>
-          <tr><td><code>price_above</code></td><td>price is at/above your target</td></tr>
-          <tr><td><code>back_in_stock</code></td><td>the item becomes available</td></tr>
-          <tr><td><code>out_of_stock</code></td><td>the item sells out</td></tr>
+          <tr><td><code>any_change</code></td><td><strong>anything</strong> you watch changes (price, stock, title…)</td></tr>
+          <tr><td><code>price_drop</code></td><td>the price goes <strong>down</strong> by any amount</td></tr>
+          <tr><td><code>price_below</code></td><td>the price is <strong>at or below</strong> your <code>--target</code></td></tr>
+          <tr><td><code>price_above</code></td><td>the price is <strong>at or above</strong> your <code>--target</code></td></tr>
+          <tr><td><code>back_in_stock</code></td><td>the item becomes <strong>available</strong> again</td></tr>
+          <tr><td><code>out_of_stock</code></td><td>the item <strong>sells out</strong></td></tr>
         </tbody>
       </table>
 
+      <h2 id="recipes">Recipes</h2>
+      <p>Copy-paste starting points for common goals:</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="c"># Track a competitor's price, alert on any drop, check hourly</span>
+<span class="p">crawlr watch "https://store.com/p/123" --trigger price_drop --interval 60</span>
+
+<span class="c"># Get pinged when something is back in stock</span>
+<span class="p">crawlr watch "https://store.com/p/123" --restock</span>
+
+<span class="c"># Compare the same product across three shops</span>
+<span class="p">crawlr compare "https://a.com/p" "https://b.com/p" "https://c.com/p"</span>
+
+<span class="c"># Monitor a job board (schema auto-detected)</span>
+<span class="p">crawlr watch "https://boards.example/jobs" --interval 720</span>
+
+<span class="c"># Free phone alerts via ntfy.sh, then run in the background</span>
+<span class="p">export CRAWLR_ALERT_NTFY="https://ntfy.sh/my-crawlr-alerts"</span>
+<span class="p">crawlr monitor --daemon</span>
+
+<span class="c"># Pause / resume / remove a watch (ids come from `crawlr watchlist`)</span>
+<span class="p">crawlr pause 3 && crawlr resume 3 && crawlr unwatch 3</span>
+
+<span class="c"># Pipe machine-readable output into other tools</span>
+<span class="p">crawlr watchlist --json | jq '.[] | {title, price}'</span></pre></div>
+
+      <h2 id="canvas">Canvas — shop a product across many stores</h2>
+      <p>Know <em>what</em> you want but not <em>where</em> to buy it (say a <em>Wooting 60HE</em>)?
+      <code>crawlr canvas</code> searches several retailers at once, grabs the best-matching result
+      and price from each, converts everything to one currency, and ranks them so you can
+      comparison-shop in one command.</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr canvas "Wooting 60HE"</span>                                        <span class="c"># all known retailers</span>
+<span class="p">crawlr canvas "Wooting 60HE" --retailers amazon,ebay,newegg --to USD</span></pre></div>
+      <p>Built-in retailers include Amazon, eBay, Walmart, Newegg, Lazada, and AliExpress. Add your
+      own with a YAML file (<code>CRAWLR_CANVAS_RETAILERS</code>). Big marketplaces block bots, so
+      for reliable results set up a <a href="#config-provider">fetch provider</a> first.</p>
+
+      <h2 id="config">Configuration — how settings work</h2>
+      <p>Crawlr is configured with <strong>environment variables</strong>. You can set them three ways:</p>
+      <table>
+        <thead><tr><th>Where</th><th>How</th></tr></thead>
+        <tbody>
+          <tr><td>macOS / Linux</td><td><code>export CRAWLR_LLM_PROVIDER=openai</code></td></tr>
+          <tr><td>Windows PowerShell</td><td><code>$env:CRAWLR_LLM_PROVIDER="openai"</code></td></tr>
+          <tr><td>A <code>.env</code> file</td><td>Add a line <code>CRAWLR_LLM_PROVIDER=openai</code> in your project folder</td></tr>
+        </tbody>
+      </table>
+      <p>The <code>.env</code> file is the easiest for permanent settings — Crawlr loads it
+      automatically. Below are the settings grouped by what you're trying to do; there's a
+      <a href="#config-reference">full reference table</a> at the end.</p>
+
+      <h3 id="config-ai">AI mode (LLM) — optional, improves accuracy</h3>
+      <p>Crawlr runs <strong>free and offline</strong> by default using a heuristic. Adding an
+      OpenAI or Anthropic key only helps on unusual layouts, and the model runs <em>once per
+      site</em> so cost stays tiny.</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash — enable OpenAI</span></div><pre><span class="p">export CRAWLR_LLM_PROVIDER="openai"</span>       <span class="c"># or "anthropic", or "none" (default)</span>
+<span class="p">export CRAWLR_LLM_API_KEY="sk-..."</span>        <span class="c"># your provider key</span>
+<span class="p">export CRAWLR_LLM_MAX_CALLS="2"</span>           <span class="c"># cap calls per scrape (cost guard)</span></pre></div>
+
+      <h3 id="config-alerts">Alerts &amp; notifications</h3>
+      <p>Set any of these and Crawlr will notify you there. Set several and it uses all of them.
+      Verify your setup any time with <code>crawlr test-alert</code>.</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash — pick the channels you want</span></div><pre><span class="p">export CRAWLR_ALERT_DISCORD="https://discord.com/api/webhooks/..."</span>
+<span class="p">export CRAWLR_ALERT_SLACK="https://hooks.slack.com/services/..."</span>
+<span class="p">export CRAWLR_ALERT_NTFY="https://ntfy.sh/my-crawlr-alerts"</span>   <span class="c"># free phone push</span>
+<span class="p">export CRAWLR_ALERT_TELEGRAM_TOKEN="123:abc"</span>                 <span class="c"># from @BotFather</span>
+<span class="p">export CRAWLR_ALERT_TELEGRAM_CHAT_ID="123456"</span>
+<span class="p">export CRAWLR_ALERT_WEBHOOK="https://webhook.site/your-id"</span>    <span class="c"># any generic webhook</span>
+
+<span class="p">crawlr test-alert</span>   <span class="c"># sends a test message to every channel above</span></pre></div>
+      <p>Extra alert controls:</p>
+      <ul>
+        <li><code>CRAWLR_ALERT_THROTTLE_MINUTES=60</code> — don't repeat the same alert within an hour.</li>
+        <li><code>CRAWLR_WEBHOOK_SECRET=…</code> — sign generic-webhook payloads (<code>X-Crawlr-Signature</code>).</li>
+        <li>Prefer a daily summary over per-change pings? Use <code>crawlr digest --send</code> or run <code>crawlr monitor --daemon --digest 24</code>.</li>
+      </ul>
+
+      <h3 id="config-fx">Currency conversion</h3>
+      <p><code>crawlr compare</code> and <code>crawlr canvas</code> can compare prices across
+      currencies. By default they convert using a built-in offline rate table into USD.</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_FX_BASE="PHP"</span>          <span class="c"># compare everything in pesos</span>
+<span class="p">export CRAWLR_FX_LIVE="true"</span>         <span class="c"># fetch live rates (cached), else use pinned table</span>
+<span class="p">export CRAWLR_FX_RATES="EUR=0.92,GBP=0.79"</span>  <span class="c"># pin specific rates (units per USD)</span>
+
+<span class="p">crawlr fx --amount 100 --from EUR --to USD</span>   <span class="c"># quick one-off conversion</span></pre></div>
+
+      <h3 id="config-provider">Fetch providers — for big marketplaces</h3>
+      <p>Amazon, Lazada, Shopee and friends actively block bots. Instead of fighting that, route
+      fetches through a rendering/unblocking service (they run a real browser + rotate proxies and
+      hand back clean HTML). Crawlr then extracts as usual — <strong>no code changes</strong>.</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_FETCH_PROVIDER="scraperapi"</span>   <span class="c"># or scrapingbee | zyte | custom</span>
+<span class="p">export CRAWLR_FETCH_PROVIDER_KEY="your-key"</span>
+<span class="p">crawlr doctor</span>                              <span class="c"># confirms the provider is set</span></pre></div>
+      <p>Most providers offer a free tier to start. Any other "URL in → HTML out" service works via
+      <code>CRAWLR_FETCH_PROVIDER=custom</code> plus <code>CRAWLR_FETCH_PROVIDER_ENDPOINT</code>,
+      <code>_URL_PARAM</code>, <code>_KEY_PARAM</code>/<code>_KEY_HEADER</code>, <code>_EXTRA</code>,
+      and <code>_RESPONSE</code>/<code>_HTML_PATH</code>. Even more reliable and fully legal: a
+      marketplace's <strong>official API</strong>.</p>
+
+      <h3 id="config-antibot">Anti-bot &amp; robots</h3>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_PROXIES="http://user:pass@host:port,http://host2:port"</span>  <span class="c"># rotate proxies</span>
+<span class="p">export CRAWLR_RESPECT_ROBOTS="false"</span>  <span class="c"># only for sites you're allowed to scrape</span></pre></div>
+      <p>Crawlr honors <code>robots.txt</code> by default. Turning it off is your responsibility —
+      see <a href="#legal">Legal &amp; ethics</a>.</p>
+
+      <h3 id="config-storage">Storage &amp; Postgres</h3>
+      <p>Crawlr uses a local <strong>SQLite</strong> database by default (zero setup). For scale or
+      multiple workers, point it at Postgres — the same code runs on both.</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_DATABASE_URL="postgresql://user:pass@localhost:5432/crawlr"</span>
+<span class="p">export CRAWLR_DATA_DIR="./.crawlr"</span>   <span class="c"># where the DB, cache & snapshots live</span></pre></div>
+
+      <h3 id="config-reference">Full reference</h3>
+      <table>
+        <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>CRAWLR_LLM_PROVIDER</code></td><td><code>none</code></td><td><code>openai</code>, <code>anthropic</code>, or <code>none</code> (offline heuristic)</td></tr>
+          <tr><td><code>CRAWLR_LLM_API_KEY</code></td><td>—</td><td>API key for the chosen provider</td></tr>
+          <tr><td><code>CRAWLR_LLM_MAX_CALLS</code></td><td><code>2</code></td><td>Max LLM calls per scrape (cost guard)</td></tr>
+          <tr><td><code>CRAWLR_DATABASE_URL</code></td><td>—</td><td><code>postgresql://…</code> to use Postgres instead of SQLite</td></tr>
+          <tr><td><code>CRAWLR_DATA_DIR</code></td><td><code>./.crawlr</code></td><td>Where the DB, selector cache &amp; snapshots live</td></tr>
+          <tr><td><code>CRAWLR_ALERT_WEBHOOK</code></td><td>—</td><td>Webhook URL for change alerts</td></tr>
+          <tr><td><code>CRAWLR_ALERT_SLACK</code></td><td>—</td><td>Slack incoming-webhook URL</td></tr>
+          <tr><td><code>CRAWLR_ALERT_DISCORD</code></td><td>—</td><td>Discord incoming-webhook URL</td></tr>
+          <tr><td><code>CRAWLR_ALERT_TEAMS</code></td><td>—</td><td>Microsoft Teams incoming-webhook URL</td></tr>
+          <tr><td><code>CRAWLR_ALERT_NTFY</code></td><td>—</td><td>ntfy.sh (or self-hosted) topic URL</td></tr>
+          <tr><td><code>CRAWLR_ALERT_TELEGRAM_TOKEN</code></td><td>—</td><td>Telegram bot token (from @BotFather)</td></tr>
+          <tr><td><code>CRAWLR_ALERT_TELEGRAM_CHAT_ID</code></td><td>—</td><td>Telegram chat id to send alerts to</td></tr>
+          <tr><td><code>CRAWLR_WEBHOOK_SECRET</code></td><td>—</td><td>HMAC-signs generic webhook payloads</td></tr>
+          <tr><td><code>CRAWLR_ALERT_THROTTLE_MINUTES</code></td><td><code>0</code></td><td>Suppress repeat alerts within N minutes</td></tr>
+          <tr><td><code>CRAWLR_PROXIES</code></td><td>—</td><td>Comma-separated proxy URLs to rotate</td></tr>
+          <tr><td><code>CRAWLR_RESPECT_ROBOTS</code></td><td><code>true</code></td><td>Honor robots.txt</td></tr>
+          <tr><td><code>CRAWLR_FX_BASE</code></td><td><code>USD</code></td><td>Currency that compare/canvas convert prices into</td></tr>
+          <tr><td><code>CRAWLR_FX_LIVE</code></td><td><code>false</code></td><td>Fetch live FX rates (cached) instead of the pinned table</td></tr>
+          <tr><td><code>CRAWLR_FX_API_URL</code></td><td>open.er-api.com</td><td>Live FX endpoint (<code>{"rates": {CODE: perUSD}}</code>)</td></tr>
+          <tr><td><code>CRAWLR_FX_RATES</code></td><td>—</td><td>Pinned rate overrides, e.g. <code>EUR=0.92,GBP=0.79</code></td></tr>
+          <tr><td><code>CRAWLR_FETCH_PROVIDER</code></td><td><code>direct</code></td><td>Unblocking backend: <code>scraperapi</code>, <code>scrapingbee</code>, <code>zyte</code>, <code>custom</code>, or <code>direct</code></td></tr>
+          <tr><td><code>CRAWLR_FETCH_PROVIDER_KEY</code></td><td>—</td><td>API key for the chosen fetch provider</td></tr>
+          <tr><td><code>CRAWLR_FETCH_PROVIDER_RENDER</code></td><td><code>true</code></td><td>Ask the provider to render JavaScript (costs more credits)</td></tr>
+          <tr><td><code>CRAWLR_CANVAS_RETAILERS</code></td><td>—</td><td>YAML file adding your own stores to <code>crawlr canvas</code></td></tr>
+          <tr><td><code>CRAWLR_MIN_FIELD_CONFIDENCE</code></td><td><code>0.0</code></td><td>Minimum confidence before alerting on a field</td></tr>
+          <tr><td><code>CRAWLR_API_KEY</code></td><td>—</td><td>Protects the JSON API when set</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="schemas">Custom schemas (no code)</h2>
+      <p>A <em>schema</em> tells Crawlr what to pull off a page. It ships with <code>product</code>
+      and <code>product_list</code>, plus presets for <code>jobs</code>, <code>real_estate</code>,
+      and <code>news</code>. You can add your own by writing a small YAML file — no Python needed.</p>
+
+      <p><strong>Step 1 — write the schema.</strong> Each field has a <code>name</code>, a plain
+      <code>description</code> (the hint Crawlr uses to find it), and a <code>type</code>:</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">jobs.yaml</span></div><pre>name: jobs
+item_selector: ".job-card"     <span class="c"># repeats once per result on a list page</span>
+fields:
+  - name: title
+    description: the job title
+    type: text
+    required: true             <span class="c"># extraction "fails" if this is missing</span>
+  - name: salary
+    description: annual salary
+    type: number</pre></div>
+      <table>
+        <thead><tr><th>Piece</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code></td><td>The schema's name — you pass it to <code>--schema</code>.</td></tr>
+          <tr><td><code>item_selector</code></td><td>CSS selector for one repeating item (list/search pages). Omit it for single-item pages.</td></tr>
+          <tr><td><code>description</code></td><td>Natural-language hint used to locate the field the first time.</td></tr>
+          <tr><td><code>type</code></td><td><code>text</code>, <code>number</code>, <code>price</code>, <code>url</code>, <code>image</code>, or <code>bool</code>.</td></tr>
+          <tr><td><code>required</code></td><td><code>true</code> means a run counts as "broken" (and self-heals) if this field is empty.</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Step 2 — put it where Crawlr looks</strong> (your schema directory, by default
+      <code>./.crawlr/schemas/</code>) and validate it:</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">mkdir -p .crawlr/schemas && mv jobs.yaml .crawlr/schemas/</span>
+<span class="p">crawlr validate-schema .crawlr/schemas/jobs.yaml</span>   <span class="c"># checks it's well-formed</span>
+<span class="p">crawlr schemas</span>                                     <span class="c"># confirm it's listed</span></pre></div>
+      <p><strong>Step 3 — use it:</strong></p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr scrape "https://boards.example/jobs" --schema jobs</span></pre></div>
+
       <h2 id="rules">Rules template</h2>
-      <p>For richer logic across many situations, <code>crawlr init</code> writes
-      <code>crawlr.rules.yaml</code>. When present, it overrides per-watch triggers.</p>
+      <p>Want richer "if this, do that" logic across many situations? Run <code>crawlr init</code>
+      to create <code>crawlr.rules.yaml</code>. When it exists, it overrides per-watch triggers.</p>
       <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">crawlr.rules.yaml</span></div><pre>default_action: ignore
 rules:
   - when: price_drops_below
@@ -163,32 +352,6 @@ rules:
     action: alert
   - when: price_increases
     action: ignore</pre></div>
-
-      <h2 id="schemas">Schemas &amp; verticals</h2>
-      <p>A schema describes what to extract. Built-in: <code>product</code>, <code>product_list</code>.
-      Bundled presets: <code>jobs</code>, <code>real_estate</code>, <code>news</code>. Add your own
-      by dropping a YAML file in your schema dir (precedence: user &gt; presets &gt; built-in):</p>
-      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">jobs.yaml</span></div><pre>name: jobs
-item_selector: ".job-card"
-fields:
-  - name: title
-    description: the job title
-    type: text
-    required: true
-  - name: salary
-    description: annual salary
-    type: number</pre></div>
-      <p>Then <code>crawlr scrape &lt;url&gt; --schema jobs</code>. Validate with
-      <code>crawlr validate-schema file.yaml</code>.</p>
-
-      <h2 id="alerts">Alerts &amp; digests</h2>
-      <p>Configure any sinks via env vars; verify with <code>crawlr test-alert</code>.</p>
-      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_ALERT_WEBHOOK="https://webhook.site/your-id"</span>
-<span class="p">export CRAWLR_ALERT_SLACK="https://hooks.slack.com/services/..."</span>
-<span class="p">export CRAWLR_ALERT_EMAIL_TO="you@example.com"</span></pre></div>
-      <p>Prefer a daily roll-up over one alert per change? Use the <strong>digest</strong>:
-      <code>crawlr digest --hours 24 --send</code>, or run the daemon with
-      <code>crawlr monitor --daemon --digest 24</code>.</p>
 
       <h2 id="api">Hosted API</h2>
       <p>Run the JSON API and drive Crawlr from any language. Set <code>CRAWLR_API_KEY</code> to
@@ -200,48 +363,21 @@ POST /api/scrape     {"url": "...", "schema_name": "product"}
 POST /api/watch      {"url": "...", "trigger": "price_below", "target_price": 25}
 GET  /api/watchlist  |  /api/stats  |  /api/digest?hours=24  |  /api/changes</pre></div>
 
-      <h2 id="config">Configuration</h2>
-      <table>
-        <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
-        <tbody>
-          <tr><td><code>CRAWLR_DATA_DIR</code></td><td><code>./.crawlr</code></td><td>DB, selector cache, snapshots, schemas</td></tr>
-          <tr><td><code>CRAWLR_DATABASE_URL</code></td><td>—</td><td><code>postgresql://…</code> to use Postgres</td></tr>
-          <tr><td><code>CRAWLR_LLM_PROVIDER</code></td><td><code>none</code></td><td><code>openai</code>, <code>anthropic</code>, or <code>none</code></td></tr>
-          <tr><td><code>CRAWLR_LLM_API_KEY</code></td><td>—</td><td>API key for the provider</td></tr>
-          <tr><td><code>CRAWLR_LLM_MAX_CALLS</code></td><td><code>2</code></td><td>Max LLM calls per scrape</td></tr>
-          <tr><td><code>CRAWLR_PROXIES</code></td><td>—</td><td>Comma-separated proxy URLs to rotate</td></tr>
-          <tr><td><code>CRAWLR_RESPECT_ROBOTS</code></td><td><code>true</code></td><td>Honor robots.txt</td></tr>
-          <tr><td><code>CRAWLR_MAX_PRICE_FACTOR</code></td><td><code>20</code></td><td>Plausibility guard threshold</td></tr>
-          <tr><td><code>CRAWLR_MIN_FIELD_CONFIDENCE</code></td><td><code>0.0</code></td><td>Min confidence to alert on a field</td></tr>
-          <tr><td><code>CRAWLR_API_KEY</code></td><td>—</td><td>Protects the JSON API when set</td></tr>
-        </tbody>
-      </table>
-
-      <h2 id="storage">Storage</h2>
-      <p>Crawlr defaults to a local <strong>SQLite</strong> database (zero config). For scale, set
-      <code>CRAWLR_DATABASE_URL</code> to a Postgres URL — the same portable SQL runs on both.
-      Sites, runs, time-series records, and the change log are all persisted.</p>
-
-      <h2 id="reliability">Reliability</h2>
-      <p>Crawlr archives a compressed snapshot of each fetched page, so you can
-      <code>crawlr replay &lt;url&gt;</code> to re-extract offline and debug selectors without
-      re-fetching. Anti-bot blocks (HTTP 403/429/503, Cloudflare/CAPTCHA) are detected and a browser
-      escalation is attempted. A golden-fixture <strong>eval harness</strong>
-      (<code>crawlr eval</code>) guards extraction accuracy as a regression gate.</p>
-
       <h2 id="deploy">Deploy</h2>
-      <p>Crawlr is a CLI — "deploy" means running the scheduler where it can check on a timer:</p>
+      <p>Crawlr is a CLI — "deploy" just means running the checker on a timer:</p>
       <ul>
-        <li><strong>Cron</strong> — schedule <code>crawlr monitor</code>.</li>
+        <li><strong>Cron</strong> — schedule <code>crawlr monitor</code> however often you like.</li>
         <li><strong>Daemon</strong> — <code>crawlr monitor --daemon</code> on any always-on machine.</li>
-        <li><strong>Docker</strong> — <code>docker compose up</code> runs the scheduler with Postgres.</li>
+        <li><strong>Docker</strong> — <code>docker compose up -d</code> runs the dashboard + a background monitor.</li>
       </ul>
 
       <h2 id="legal">Legal &amp; ethics</h2>
-      <p>Crawlr honors <code>robots.txt</code> by default and applies polite rate limiting. You are
-      responsible for complying with each site's terms of service and applicable law. Point it at
-      sites you're permitted to monitor (your own, competitors where allowed, or sites that permit
-      scraping). Don't use it to overload servers or collect personal data.</p>
+      <p>Crawlr honors <code>robots.txt</code> by default and rate-limits politely. <strong>You are
+      responsible for how you use it.</strong> Respect each site's Terms of Service and applicable
+      law (e.g. the CFAA and GDPR/CCPA when personal data is involved). Point it at sites you're
+      permitted to monitor — your own listings, price research, or public data — and don't use it
+      to overload servers, bypass logins/paywalls, or collect personal data. For big marketplaces,
+      prefer official APIs where available.</p>
 
       <p class="doc-foot"><a href="index.html">← Back to home</a> · <a href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener">GitHub</a> · <a href="https://pypi.org/project/crawlr/" target="_blank" rel="noopener">PyPI</a></p>
     </main>
