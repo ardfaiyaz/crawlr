@@ -14,7 +14,7 @@ import hashlib
 
 from selectolax.parser import HTMLParser, Node
 
-from . import archive, config, llm, normalize, selector_cache, structured, usage
+from . import archive, config, fallback, llm, normalize, selector_cache, structured, usage
 from .fetcher import fetch
 from .models import ExtractionResult, ExtractionSchema, FieldSpec, FieldType
 from .validate import confidence_score, validate_records
@@ -121,6 +121,19 @@ def _finalize(
             if any(v == 0.5 for v in field_conf.values()):
                 result.warnings.append("Structured data disagreed with selectors on a field.")
 
+        # Last-resort page-level fallbacks: fill any essentials still missing
+        # after structured data + selectors (title/price/currency/availability/
+        # image), so a product page yields useful data even on unusual layouts.
+        # These only fill gaps — they never overwrite an existing value.
+        filled = _fill_fallbacks(records[0], html, schema)
+        for name in filled:
+            result.field_source.setdefault(name, "fallback")
+        disc = normalize.compute_discount(
+            records[0].get("original_price"), records[0].get("price")
+        )
+        if disc is not None:
+            records[0]["discount_pct"] = disc
+
     result.records = records
 
     if result.field_confidence:
@@ -137,6 +150,46 @@ def _finalize(
     if errors:
         result.warnings.append(f"{len(errors)} validation issue(s); first: {errors[0]}")
     return result
+
+
+def _fill_fallbacks(record: dict, html: str, schema: ExtractionSchema) -> list[str]:
+    """Fill still-empty canonical fields with aggressive page-level heuristics.
+
+    Returns the names of the fields that were filled (used to mark provenance).
+    Only fields the schema actually asks for are considered, and only when the
+    record's value is still missing.
+    """
+    tree = HTMLParser(html)
+    names = {f.name for f in schema.fields}
+    filled: list[str] = []
+
+    if "title" in names and record.get("title") in (None, ""):
+        title = fallback.fallback_title(tree)
+        if title:
+            record["title"] = title
+            filled.append("title")
+
+    if "price" in names and record.get("price") in (None, ""):
+        amount, currency = fallback.fallback_price(tree)
+        if amount is not None:
+            record["price"] = amount
+            filled.append("price")
+            if currency and record.get("currency") in (None, ""):
+                record["currency"] = currency
+
+    if "availability" in names and record.get("availability") in (None, ""):
+        avail = fallback.fallback_availability(tree)
+        if avail:
+            record["availability"] = avail
+            filled.append("availability")
+
+    if "image" in names and record.get("image") in (None, ""):
+        image = fallback.fallback_image(tree)
+        if image:
+            record["image"] = image
+            filled.append("image")
+
+    return filled
 
 
 def _quality_label(confidence: float, field_source: dict) -> str:

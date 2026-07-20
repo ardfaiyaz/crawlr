@@ -155,59 +155,91 @@ def _apply_selector_map(schema: ExtractionSchema, data: dict) -> ExtractionSchem
 _HEURISTIC_PATTERNS: dict[str, list[tuple[str, str | None]]] = {
     "title": [
         ('[itemprop="name"]', None),
+        ("#productTitle", None),          # Amazon
+        (".product_main h1", None),       # books.toscrape / generic
         (".product-title", None),
         (".product-name", None),
+        (".product__title", None),        # Shopify
+        (".product-single__title", None),  # Shopify (older)
+        (".product_title", None),         # WooCommerce
+        (".pdp-name", None),              # Lazada-style
+        (".pdp-mod-product-badge-title", None),
+        ("h1.title", None),
         ("h1", None),
-        ("h2", None),
-        ("h3", None),
         (".name", None),
         (".title", None),
+        ("h2", None),
+        ("h3", None),
         ("h2 a", None),
     ],
     "price": [
         ('[itemprop="price"]', "content"),
-        (".price", None),
-        (".price_color", None),
+        (".price_color", None),           # books.toscrape
+        (".a-price .a-offscreen", None),  # Amazon
+        (".price__current", None),        # Shopify
+        (".price-item--regular", None),   # Shopify
+        (".product__price", None),        # Shopify
+        (".woocommerce-Price-amount", None),  # WooCommerce
+        (".pdp-price", None),             # Lazada-style
+        (".pdp-product-price", None),
+        (".current-price", None),
+        (".sale-price", None),
         (".product-price", None),
-        (".a-price .a-offscreen", None),
+        (".price", None),
         (".cost", None),
         (".amount", None),
+        (".money", None),
+        ("[data-price-amount]", "data-price-amount"),
         ("[data-price]", "data-price"),
     ],
     "availability": [
         ('[itemprop="availability"]', "href"),
         (".availability", None),
-        (".stock", None),
+        (".instock", None),
         (".in-stock", None),
+        (".stock-status", None),
+        (".product-stock", None),
+        (".stock", None),
     ],
     "rating": [
         ('[itemprop="ratingValue"]', None),
+        (".a-icon-alt", None),            # Amazon
+        (".star-rating", None),
         (".rating", None),
         (".stars", None),
     ],
     "image": [
         ('[itemprop="image"]', "src"),
+        ("#landingImage", "src"),         # Amazon
+        (".product__media img", "src"),   # Shopify
         (".product-image img", "src"),
         ("img.product-image", "src"),
+        (".pdp-mod-common-image img", "src"),  # Lazada-style
         ("img.product", "src"),
+        (".item_cover img", "src"),       # books.toscrape
         ("img", "src"),
     ],
     "url": [
         ("a.product-link", "href"),
+        (".product__title a", "href"),    # Shopify
         ("h2 a", "href"),
         ("h3 a", "href"),
         ("a", "href"),
     ],
 }
 
-# Common containers for repeating product items.
+# Common containers for repeating product items (listing/search pages).
 _ITEM_CONTAINER_CANDIDATES = [
+    ".product_pod",                              # books.toscrape
+    "[data-component-type='s-search-result']",   # Amazon results
+    "[data-qa-locator='product-item']",          # Lazada-style
     "[itemtype*='Product']",
-    ".product",
     ".product-item",
     ".product-card",
-    "li.product",
+    ".grid__item",                               # Shopify grids
+    "li.product",                                # WooCommerce
     "article.product",
+    ".product",
     ".s-result-item",
     ".card",
     "article",
