@@ -359,3 +359,51 @@ def test_canvas_hit_carries_rich_fields(monkeypatch):
     hit = next(h for h in report["hits"] if h.retailer == "Lazada PH")
     assert hit.rating == 4.8 and hit.reviews == 120
     assert report["stats"]["count"] >= 1
+
+
+
+def test_canvas_extracts_jsonld_from_html(monkeypatch):
+    jsonld = (
+        '<script type="application/ld+json">'
+        '{"@type":"ItemList","itemListElement":[{"@type":"ListItem","item":'
+        '{"@type":"Product","name":"MAD60 HE Keyboard","url":"https://shop.test/p/1",'
+        '"offers":{"price":"3499","priceCurrency":"PHP","availability":"InStock"}}}]}'
+        "</script>"
+    )
+
+    def _scrape(url, schema, force_js=False):
+        return ExtractionResult(url=url, schema_name="product_list", records=[], html=jsonld)
+
+    monkeypatch.setattr(canvas, "scrape", _scrape)
+    report = canvas.search("mad60 he", retailers=["amazon"], base="PHP", expand=False)
+    assert any(h.title == "MAD60 HE Keyboard" and h.price == 3499.0 for h in report["hits"])
+
+
+def test_brand_site_detection():
+    assert [r.name for r in canvas._detect_brand_sites("razer huntsman v3")] == ["Razer"]
+    assert canvas._detect_brand_sites("mechanical keyboard") == []
+
+
+def test_brand_site_added_to_search(monkeypatch):
+    monkeypatch.setattr(canvas.config, "CANVAS_MIN_RESULTS", 0)  # disable expansion
+
+    def _scrape(url, schema, force_js=False):
+        return ExtractionResult(url=url, schema_name="product_list", records=[])
+
+    monkeypatch.setattr(canvas, "scrape", _scrape)
+    report = canvas.search("razer viper", country="ph", base="PHP")
+    assert "Razer" in report["retailers_searched"]
+
+
+def test_group_hits_clusters_same_product():
+    H = canvas.CanvasHit
+    hits = [
+        H("Shopee", "Logitech G Pro X Superlight", 5495, "PHP", "u1", 5495, 0.9),
+        H("Lazada", "Logitech G Pro X Superlight Wireless Mouse", 5380, "PHP", "u2", 5380, 0.9),
+        H("DataBlitz", "Razer Viper V3 Pro", 3200, "PHP", "u3", 3200, 0.9),
+    ]
+    groups = canvas.group_hits(hits)
+    assert len(groups) == 2
+    assert groups[0][0].retailer == "DataBlitz"          # cheapest group first (3200)
+    logi = next(g for g in groups if len(g) == 2)
+    assert [h.retailer for h in logi] == ["Lazada", "Shopee"]  # cheapest-first within group

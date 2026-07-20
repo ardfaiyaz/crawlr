@@ -99,6 +99,7 @@ def _finalize(
     structured data (JSON-LD / microdata / OpenGraph) to fill gaps, correct
     disagreements, and produce per-field confidence.
     """
+    result.html = html
     # Consensus layer: only meaningful for single-record extraction.
     if records and html and not schema.item_selector:
         data = structured.extract_structured(html)

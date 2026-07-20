@@ -26,7 +26,7 @@ from urllib.parse import quote_plus, urldefrag, urljoin
 
 import httpx
 
-from . import config, currency
+from . import config, currency, structured
 from .extractor import scrape
 from .verticals import ecommerce
 
@@ -341,6 +341,8 @@ _GLOBAL: dict[str, Retailer] = {
     "walmart": Retailer("Walmart", "https://www.walmart.com/search?q={q}"),
     "newegg": Retailer("Newegg", "https://www.newegg.com/p/pl?d={q}"),
     "aliexpress": Retailer("AliExpress", "https://www.aliexpress.com/wholesale?SearchText={q}"),
+    "temu": Retailer("Temu", "https://www.temu.com/search_result.html?search_key={q}"),
+    "banggood": Retailer("Banggood", "https://www.banggood.com/search/{q}.html"),
 }
 
 # Local marketplaces by country (ISO-3166 alpha-2). AliExpress ships worldwide,
@@ -366,6 +368,10 @@ _REGIONS: dict[str, dict[str, Retailer]] = {
         "pcexpress": _store("PC Express", "pcexpress.com.ph"),
         "gamextreme": _store("GameXtreme", "www.gamextreme.ph"),
         "villman": _store("Villman", "villman.com"),
+        "watsons": _store("Watsons PH", "www.watsons.com.ph"),
+        "smstore": _store("SM Store", "www.thesmstore.com"),
+        "temu": Retailer("Temu", "https://www.temu.com/search_result.html?search_key={q}"),
+        "banggood": Retailer("Banggood", "https://www.banggood.com/search/{q}.html"),
         "aliexpress": _ALIEXPRESS,
         "amazon": _GLOBAL["amazon"],
         "ebay": _GLOBAL["ebay"],
@@ -462,6 +468,29 @@ _REGIONS: dict[str, dict[str, Retailer]] = {
         "newegg": Retailer("Newegg CA", "https://www.newegg.ca/p/pl?d={q}"),
     },
 }
+
+# Official brand stores, searched additionally when the query names the brand.
+_BRAND_SITES: dict[str, Retailer] = {
+    "razer": Retailer("Razer", "https://www.razer.com/search?q={q}"),
+    "logitech": Retailer("Logitech", "https://www.logitech.com/en-us/search.html?searchTerm={q}"),
+    "steelseries": Retailer("SteelSeries", "https://steelseries.com/search?q={q}"),
+    "asus": Retailer("ASUS", "https://www.asus.com/search/?searchType=products&q={q}"),
+    "nike": Retailer("Nike", "https://www.nike.com/w?q={q}"),
+    "adidas": Retailer("Adidas", "https://www.adidas.com/us/search?q={q}"),
+    "apple": Retailer("Apple", "https://www.apple.com/us/search/{q}"),
+    "samsung": Retailer("Samsung", "https://www.samsung.com/us/search/searchMain/?searchTerm={q}"),
+    "sony": Retailer("Sony", "https://electronics.sony.com/search?q={q}"),
+    "lenovo": Retailer("Lenovo", "https://www.lenovo.com/us/en/search?text={q}"),
+    "acer": Retailer("Acer", "https://www.acer.com/us-en/search?q={q}"),
+    "canon": Retailer("Canon", "https://www.usa.canon.com/search?q={q}"),
+}
+
+
+def _detect_brand_sites(query: str) -> list[Retailer]:
+    """Official brand stores whose name appears as a word in the query."""
+    tokens = {t for t in re.split(r"\W+", query.lower()) if t}
+    return [r for key, r in _BRAND_SITES.items() if key in tokens]
+
 
 # Infer a country from the target currency when one isn't given explicitly.
 _CCY_COUNTRY: dict[str, str] = {
@@ -774,6 +803,37 @@ def _top_matches(
     ]
 
 
+def _jsonld_products(html: str, base_url: str) -> list[dict]:
+    """Products parsed from a page's embedded JSON-LD — the structured-data
+    strategy that works on many stores where CSS selectors find nothing."""
+    if not html:
+        return []
+    try:
+        prods = structured.extract_product_list(html)
+    except Exception:  # pragma: no cover - defensive
+        return []
+    out: list[dict] = []
+    for p in prods:
+        purl = p.get("url") or ""
+        if purl:
+            purl = urljoin(base_url, str(purl))
+        reviews = p.get("review_count")
+        rating = p.get("rating")
+        out.append(
+            {
+                "title": p.get("title"),
+                "price": p.get("price"),
+                "original_price": p.get("original_price"),
+                "currency": p.get("currency"),
+                "url": purl or base_url,
+                "image": p.get("image"),
+                "rating": rating if isinstance(rating, (int, float)) else None,
+                "reviews": int(reviews) if isinstance(reviews, (int, float)) else None,
+            }
+        )
+    return out
+
+
 def _search_one(
     retailer: Retailer,
     query: str,
@@ -795,7 +855,9 @@ def _search_one(
             logger.info("Canvas: %s API adapter failed (%s); trying HTML", retailer.name, exc)
             records = []
 
-    # 2) Fall back to scraping the HTML search page (auto JS-rendered if needed).
+    # 2) Fall back to the HTML search page. On one fetch we run BOTH embedded
+    #    JSON-LD extraction and the self-healing selector extractor (auto
+    #    JS-rendered if needed), then merge — more coverage than either alone.
     if not records:
         try:
             result = scrape(url, ecommerce.PRODUCT_LIST_SCHEMA, force_js=force_js)
@@ -805,7 +867,7 @@ def _search_one(
         if getattr(result, "blocked", False):
             logger.warning("Canvas: %s blocked or unreachable", retailer.name)
             return "blocked", []
-        records = result.records
+        records = _jsonld_products(getattr(result, "html", "") or "", result.url) + result.records
 
     hits: list[CanvasHit] = []
     for match in _top_matches(query, records, per_store, search_url=url):
@@ -890,6 +952,40 @@ def _sort_hits(hits: list[CanvasHit], sort: str) -> list[CanvasHit]:
     return hits
 
 
+def _titles_similar(a: str, b: str) -> bool:
+    """True if two normalized titles likely name the same product."""
+    if a == b:
+        return True
+    ta, tb = set(a.split()), set(b.split())
+    if ta and tb and len(ta & tb) / min(len(ta), len(tb)) >= 0.6:
+        return True
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.75
+
+
+def group_hits(hits: list[CanvasHit]) -> list[list[CanvasHit]]:
+    """Cluster the same product across shops so users can compare prices, like
+    PCPartPicker. Greedy fuzzy grouping on normalized titles; each group is
+    sorted cheapest-first, and groups are ordered by their cheapest price."""
+    groups: list[dict] = []
+    for h in hits:
+        nt = _norm(h.title)
+        for g in groups:
+            if _titles_similar(nt, g["key"]):
+                g["hits"].append(h)
+                break
+        else:
+            groups.append({"key": nt, "hits": [h]})
+
+    def cheapest(hs: list[CanvasHit]) -> float:
+        vals = [x.converted for x in hs if x.converted is not None]
+        return min(vals) if vals else float("inf")
+
+    for g in groups:
+        g["hits"].sort(key=lambda x: (x.converted is None, x.converted or 0.0))
+    groups.sort(key=lambda g: cheapest(g["hits"]))
+    return [g["hits"] for g in groups]
+
+
 def _price_stats(hits: list[CanvasHit]) -> dict:
     """Min/max/avg/median (+ savings) over the converted prices we have."""
     import statistics
@@ -943,6 +1039,13 @@ def search(
         "flag" if base else ("country" if _country_currency(resolved_country) else "default")
     )
     selected = _select(retailers, catalog)
+    # When not explicitly filtering, also search the official store of any brand
+    # named in the query (e.g. "razer huntsman" -> razer.com).
+    if not retailers:
+        existing = {r.name for r in selected}
+        for brand_store in _detect_brand_sites(query):
+            if brand_store.name not in existing:
+                selected.append(brand_store)
 
     def _run_all(q: str) -> tuple[list[CanvasHit], list[str], list[str]]:
         hits_: list[CanvasHit] = []

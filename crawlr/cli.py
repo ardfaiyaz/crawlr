@@ -384,6 +384,9 @@ def canvas(
         "--sort",
         help="Order by: price, price_high, rating, reviews, popular, discount, match",
     ),
+    group: bool = typer.Option(
+        False, "--group", help="Group the same product across shops to compare prices"
+    ),
     js: bool = typer.Option(False, help="Force JS rendering (auto-used when a page is blocked)"),
 ) -> None:
     """Find a product across many retailers and compare prices ("canvas").
@@ -447,6 +450,38 @@ def canvas(
         console.print(f"[yellow]No matches found for '{query}'.[/yellow]")
         return
 
+    stats = report.get("stats") or {}
+
+    def _stats_line() -> None:
+        if stats:
+            console.print(
+                f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s) · "
+                f"{base} {stats['min']:g}–{stats['max']:g} · avg {stats['avg']:g} · "
+                f"median {stats['median']:g} · save up to {stats['savings']:g}[/dim]"
+            )
+        else:
+            console.print(
+                f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s).[/dim]"
+            )
+
+    # Grouped view: the same product across shops, cheapest-first, to compare.
+    if group:
+        groups = canvas_mod.group_hits(hits)
+        console.print(f"[bold]Canvas: {query}[/bold] — {len(groups)} product(s), {len(hits)} listing(s)")
+        for grp in groups:
+            label = min(grp, key=lambda h: len(h.title)).title
+            console.print(f"\n[bold]{_fmt(label)}[/bold]")
+            for h in grp:
+                badge = " [cyan]✓[/cyan]" if h.official else ""
+                disc = f" [green]-{h.discount_pct}%[/green]" if h.discount_pct else ""
+                console.print(
+                    f"  {h.retailer + badge:<16} {base} {_price(h.converted)}{disc}  "
+                    f"[dim]{h.url}[/dim]"
+                )
+        console.print("")
+        _stats_line()
+        return
+
     def _compact(n: int | None) -> str:
         if not n:
             return "-"
@@ -478,17 +513,7 @@ def canvas(
         )
     console.print(table)
 
-    stats = report.get("stats") or {}
-    if stats:
-        console.print(
-            f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s) · "
-            f"{base} {stats['min']:g}–{stats['max']:g} · avg {stats['avg']:g} · "
-            f"median {stats['median']:g} · save up to {stats['savings']:g}[/dim]"
-        )
-    else:
-        console.print(
-            f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s).[/dim]"
-        )
+    _stats_line()
     best = next((h for h in hits if h.converted is not None), None)
     if best:
         console.print(

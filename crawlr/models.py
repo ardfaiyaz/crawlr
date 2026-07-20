@@ -88,6 +88,9 @@ class ExtractionResult(BaseModel):
     blocked: bool = False           # the page was blocked / anti-bot challenged
     rendered_with_js: bool = False  # a headless browser rendered the page
     content_hash: str | None = None  # hash of fetched HTML (stale-page detection)
+    # Raw fetched HTML, kept in-memory for extra extraction strategies (e.g. the
+    # canvas JSON-LD product-list pass). Excluded from serialization/persistence.
+    html: str = Field(default="", exclude=True, repr=False)
     # False when any record fails schema validation.
     valid: bool = True
 

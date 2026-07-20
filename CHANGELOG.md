@@ -6,6 +6,22 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0]
+
+### Added
+- **Embedded JSON-LD product extraction** — canvas now reads schema.org
+  `Product`/`ItemList` data from a search page's HTML (one fetch runs both
+  JSON-LD and the selector extractor, merged), so stores that expose structured
+  data yield real products even when CSS selectors find nothing.
+- **More stores** — added Watsons and SM Store (platform auto-detected) plus
+  Temu and Banggood to the Philippine set (and Temu/Banggood globally).
+- **Brand-store search** — when a query names a brand, canvas also searches that
+  brand's official store (Razer, Logitech, SteelSeries, ASUS, Nike, Adidas,
+  Apple, Samsung, Sony, Lenovo, Acer, Canon).
+- **Cross-marketplace grouping** — `crawlr canvas --group` clusters the same
+  product across shops (fuzzy title match) and shows a cheapest-first price
+  comparison per product, like PCPartPicker.
+
 ## [0.6.0]
 
 ### Added

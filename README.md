@@ -545,23 +545,29 @@ off with `CRAWLR_GEO=false` (fully offline). Add your own shops any time via a Y
 
 **Behaves like a shopping aggregator, not a scraper.** For each store canvas tries multiple
 strategies in order — the store's **structured JSON search API** first (Lazada's `?ajax=true`,
-Shopee's search API, plus generic **Shopify** and **WooCommerce** Store APIs), then HTML scraping
-with automatic JS rendering. So **Lazada/Shopee and many smaller PH shops return real products with
-prices for free**, no fetch provider needed.
+Shopee's search API, plus generic **Shopify** and **WooCommerce** Store APIs), then **embedded
+JSON-LD** product data, then HTML scraping with automatic JS rendering. So **Lazada/Shopee and many
+smaller PH shops return real products with prices for free**, no fetch provider needed.
 
 It also:
 
-- **Returns many listings** — up to `--per-store` per shop (default 6), searched concurrently.
+- **Searches many stores** — Tier-1 marketplaces, local PH shops (DataBlitz, DynaQuest, EasyPC,
+  PC Express, GameXtreme, Villman, Watsons, SM), and Temu/Banggood/AliExpress, all concurrently.
+- **Adds the brand's official store** automatically when your query names a brand (e.g.
+  `razer huntsman` also searches razer.com; Logitech, ASUS, Apple, Samsung, Sony, Nike, … supported).
+- **Returns many listings** — up to `--per-store` per shop (default 6).
 - **Auto-expands the query** when results are thin (plural/singular, drop brand/model, no-space
   forms like `RTX 5070` → `RTX5070`) until it finds enough — controlled by `CRAWLR_CANVAS_MIN_RESULTS`.
 - **Extracts rich details** — price, original price, **discount %**, rating, reviews, units sold,
   official-store badge, image, and stock — where the store exposes them.
 - **Computes price intelligence** — lowest/highest/average/median and max savings across all shops.
 - **Sorts** with `--sort price|price_high|rating|reviews|popular|discount|match`.
+- **Groups the same product across shops** with `--group`, so you can compare prices side by side.
 
 ```bash
 crawlr canvas "mechanical keyboard" --per-store 8 --sort discount   # biggest deals first
 crawlr canvas "rtx 5070" --sort popular                             # best-selling first
+crawlr canvas "logitech g pro x superlight" --group                 # compare the same item across shops
 ```
 
 > **Heads-up:** the toughest marketplaces (Amazon, or Shopee from a datacenter/VPN IP) may still

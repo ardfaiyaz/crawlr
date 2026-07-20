@@ -33,6 +33,72 @@ def extract_structured(html: str) -> dict:
     return {k: v for k, v in out.items() if k in _CANONICAL}
 
 
+def extract_product_list(html: str) -> list[dict]:
+    """Extract *many* products from a search/category page's embedded JSON-LD
+    (schema.org Product nodes, incl. those inside an ItemList). Returns a list of
+    dicts with title/price/original_price/currency/url/image/rating/review_count/
+    availability. Empty when the page has no product JSON-LD."""
+    tree = HTMLParser(html)
+    products: list[dict] = []
+    seen: set[tuple] = set()
+    for script in tree.css('script[type="application/ld+json"]'):
+        text = script.text()
+        if not text:
+            continue
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        for node in _iter_nodes(data):
+            if not isinstance(node, dict):
+                continue
+            types = node.get("@type", "")
+            types = types if isinstance(types, list) else [types]
+            if not any("product" in str(t).lower() for t in types):
+                continue
+            prod = _product_from_node(node)
+            title = prod.get("title")
+            if not title or (prod.get("price") is None and not prod.get("url")):
+                continue
+            key = (str(title).strip().lower(), prod.get("url"))
+            if key in seen:
+                continue
+            seen.add(key)
+            products.append(prod)
+    return products
+
+
+def _product_from_node(node: dict) -> dict:
+    """Pull the canonical product fields out of a single JSON-LD Product node."""
+    out: dict = {}
+    _fill(out, "title", _as_str(node.get("name")))
+    _fill(out, "image", _image_url(node.get("image")))
+    _fill(out, "url", _as_str(node.get("url")))
+    _fill(out, "brand", _brand_name(node.get("brand")))
+    rating = node.get("aggregateRating")
+    if isinstance(rating, dict):
+        _fill(out, "rating", normalize.normalize_number(rating.get("ratingValue")))
+        _fill(out, "review_count", normalize.normalize_number(
+            rating.get("reviewCount") or rating.get("ratingCount")
+        ))
+    offer = _first(node.get("offers"))
+    if isinstance(offer, dict):
+        price = offer.get("price") or offer.get("lowPrice")
+        spec = offer.get("priceSpecification")
+        if price is None and isinstance(spec, dict):
+            price = spec.get("price")
+        _fill(out, "price", normalize.normalize_number(price))
+        _fill(out, "original_price", normalize.normalize_number(
+            offer.get("highPrice") or offer.get("listPrice")
+        ))
+        _fill(out, "currency", _as_str(
+            offer.get("priceCurrency")
+            or (spec.get("priceCurrency") if isinstance(spec, dict) else None)
+        ))
+        _fill(out, "availability", _availability_text(offer.get("availability")))
+    return out
+
+
 def _availability_text(value) -> str | None:
     if not value:
         return None

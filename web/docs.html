@@ -20,7 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
-        <span class="ver">v0.6.0</span>
+        <span class="ver">v0.7.0</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -242,12 +242,16 @@
       <p><strong>Behaves like a shopping aggregator, not a scraper.</strong> For each store, canvas
       tries several strategies in order — the store's own <strong>structured JSON search API</strong>
       first (Lazada's <code>?ajax=true</code>, Shopee's search API, plus generic <strong>Shopify</strong>
-      and <strong>WooCommerce</strong> Store APIs), then HTML scraping with automatic JS rendering. So
-      <strong>Lazada/Shopee and many smaller PH shops return real products with prices for free</strong>,
-      no fetch provider needed.</p>
+      and <strong>WooCommerce</strong> Store APIs), then <strong>embedded JSON-LD</strong> product data,
+      then HTML scraping with automatic JS rendering. So <strong>Lazada/Shopee and many smaller PH
+      shops return real products with prices for free</strong>, no fetch provider needed.</p>
       <ul>
-        <li><strong>Many listings</strong> — up to <code>--per-store</code> per shop (default 6),
-        searched concurrently.</li>
+        <li><strong>Many stores</strong> — Tier-1 marketplaces, local PH shops (DataBlitz, DynaQuest,
+        EasyPC, PC Express, GameXtreme, Villman, Watsons, SM) and Temu/Banggood/AliExpress, searched
+        concurrently.</li>
+        <li><strong>Brand stores</strong> — names a brand? canvas also searches its official store
+        (e.g. <code>razer huntsman</code> → razer.com; Logitech, ASUS, Apple, Samsung, Sony, Nike…).</li>
+        <li><strong>Many listings</strong> — up to <code>--per-store</code> per shop (default 6).</li>
         <li><strong>Auto-expands the query</strong> when results are thin (plural/singular, drop
         brand/model, no-space forms like <code>RTX 5070</code> → <code>RTX5070</code>) until it finds
         enough (<code>CRAWLR_CANVAS_MIN_RESULTS</code>).</li>
@@ -255,9 +259,12 @@
         sold, official-store badge, image, stock.</li>
         <li><strong>Price intelligence</strong> — lowest/highest/average/median and max savings.</li>
         <li><strong>Sorting</strong> — <code>--sort price|price_high|rating|reviews|popular|discount|match</code>.</li>
+        <li><strong>Grouping</strong> — <code>--group</code> clusters the same product across shops to
+        compare prices side by side.</li>
       </ul>
       <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr canvas "mechanical keyboard" --per-store 8 --sort discount</span>  <span class="c"># biggest deals first</span>
-<span class="p">crawlr canvas "rtx 5070" --sort popular</span>                          <span class="c"># best-selling first</span></pre></div>
+<span class="p">crawlr canvas "rtx 5070" --sort popular</span>                          <span class="c"># best-selling first</span>
+<span class="p">crawlr canvas "logitech g pro x superlight" --group</span>             <span class="c"># compare same item across shops</span></pre></div>
       <p><strong>Note:</strong> the toughest marketplaces (Amazon, or Shopee from a datacenter/VPN IP)
       may still block automated requests — Crawlr says so explicitly, and a
       <a href="#config-provider">fetch provider</a> is the most reliable fallback.</p>
