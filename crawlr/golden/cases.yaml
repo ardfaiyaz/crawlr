@@ -1,0 +1,24 @@
+# Golden extraction cases used by `crawlr eval` and the CI regression gate.
+- file: product_jsonld.html
+  schema: product
+  expected:
+    title: Test Speaker
+    price: 89.99
+    availability: In stock
+- file: product_microdata.html
+  schema: product
+  expected:
+    title: Test Lamp
+    price: 42.0
+    availability: Out of stock
+- file: product_opengraph.html
+  schema: product
+  expected:
+    title: OG Headphones
+    price: 59.99
+    availability: In stock
+- file: jobs_list.html
+  schema: jobs
+  expected:
+    title: Engineer
+    url: /j/1

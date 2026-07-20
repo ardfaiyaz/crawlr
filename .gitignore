@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Crawlr runtime data (SQLite DB, selector cache, snapshots)
+.crawlr/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Env / secrets
+.env
+
+# OS
+.DS_Store
+
+# Agent / tooling scratch dirs
+.agents/
+.kiro/

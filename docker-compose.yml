@@ -1,0 +1,52 @@
+# Crawlr: dashboard + background monitor sharing one data volume.
+#
+#   docker compose up -d      # start the dashboard (and monitor)
+#   open http://localhost:8000
+#
+# Configure alerts/LLM by adding variables under `environment:` or an `.env` file.
+services:
+  dashboard:
+    build: .
+    image: crawlr:latest
+    command: ["crawlr", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - crawlr-data:/data
+    environment:
+      CRAWLR_DATA_DIR: /data
+      # CRAWLR_LLM_PROVIDER: openai
+      # CRAWLR_LLM_API_KEY: sk-...
+      # CRAWLR_ALERT_DISCORD: https://discord.com/api/webhooks/...
+      # CRAWLR_ALERT_TELEGRAM_TOKEN: 123:abc
+      # CRAWLR_ALERT_TELEGRAM_CHAT_ID: "123456"
+    restart: unless-stopped
+
+  # Continuously checks every due watch in the background.
+  monitor:
+    image: crawlr:latest
+    command: ["crawlr", "monitor", "--daemon", "--poll", "60"]
+    depends_on:
+      - dashboard
+    volumes:
+      - crawlr-data:/data
+    environment:
+      CRAWLR_DATA_DIR: /data
+    restart: unless-stopped
+
+  # Optional: switch to Postgres for concurrent, multi-worker deployments.
+  # Uncomment this service and set CRAWLR_DATABASE_URL on the services above to
+  # postgresql://crawlr:crawlr@postgres:5432/crawlr
+  #
+  # postgres:
+  #   image: postgres:16
+  #   environment:
+  #     POSTGRES_USER: crawlr
+  #     POSTGRES_PASSWORD: crawlr
+  #     POSTGRES_DB: crawlr
+  #   volumes:
+  #     - crawlr-pg:/var/lib/postgresql/data
+
+volumes:
+  crawlr-data:
+  # crawlr-pg:
