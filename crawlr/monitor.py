@@ -10,6 +10,7 @@ external scheduler.
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Callable
 
@@ -17,6 +18,8 @@ from . import alerts, anomaly, config, db, normalize, storage, triggers
 from .config import MAX_PRICE_CHANGE_FACTOR, MIN_FIELD_CONFIDENCE
 from .extractor import scrape
 from .models import ExtractionResult, ExtractionSchema, PriceChange
+
+logger = logging.getLogger("crawlr.monitor")
 
 SchemaResolver = Callable[[str], "ExtractionSchema | None"]
 
@@ -98,10 +101,14 @@ def run_once(
 
     result = scrape(site["url"], schema, force_js=force_js)
 
-    # Don't record blocked runs: storing empty/None values would poison history
-    # and could fire false "out of stock" / price-dropped-to-null alerts. Leaving
-    # the run unrecorded also keeps the site "due" so it's retried next cycle.
+    # Don't record blocked/unreachable runs: storing empty/None values would
+    # poison history and could fire false "out of stock" / price-dropped-to-null
+    # alerts. Leaving the run unrecorded also keeps the site "due" for a retry.
     if getattr(result, "blocked", False):
+        logger.warning(
+            "Skipped site %s (%s): %s",
+            site_id, site["url"], getattr(result, "blocked_reason", None) or "blocked",
+        )
         return result, []
 
     prev_hash = storage.last_content_hash(site_id)
@@ -253,7 +260,12 @@ def run_due(
         schema = schema_resolver(site["schema_name"])
         if schema is None:
             continue
-        _, changes = run_once(site["id"], schema, watch_fields, force_js)
+        try:
+            _, changes = run_once(site["id"], schema, watch_fields, force_js)
+        except Exception as exc:  # one site's failure must not abort the batch
+            logger.warning("Error running site %s (%s): %s", site["id"], site["url"], exc)
+            results[site["id"]] = []
+            continue
         results[site["id"]] = changes
     return results
 
@@ -277,10 +289,15 @@ async def run_due_async(
         schema = schema_resolver(site["schema_name"])
         if schema is None:
             return
-        async with semaphore:
-            _, changes = await asyncio.to_thread(
-                run_once, site["id"], schema, watch_fields, force_js
-            )
+        try:
+            async with semaphore:
+                _, changes = await asyncio.to_thread(
+                    run_once, site["id"], schema, watch_fields, force_js
+                )
+        except Exception as exc:  # one site's failure must not abort the batch
+            logger.warning("Error running site %s (%s): %s", site["id"], site["url"], exc)
+            results[site["id"]] = []
+            return
         results[site["id"]] = changes
 
     await asyncio.gather(*(_worker(site) for site in due))

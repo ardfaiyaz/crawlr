@@ -230,7 +230,19 @@ def fetch(url: str, force_js: bool = False) -> FetchResult:
     if force_js:
         return _fetch_js(url)
 
-    result = _fetch_static(url)
+    try:
+        result = _fetch_static(url)
+    except httpx.HTTPError as exc:
+        # Network failure (DNS lookup failed, connection refused, timeout, TLS).
+        # Treat it like a block: don't crash the run, don't record empty data,
+        # and leave the site "due" so it's retried next cycle.
+        return FetchResult(
+            url=url,
+            html="",
+            status_code=0,
+            blocked=True,
+            blocked_reason=f"connection error ({type(exc).__name__})",
+        )
 
     # Block detection: a real browser sometimes clears anti-bot challenges.
     reason = result.blocked_reason or detect_block(result.status_code, result.html)
