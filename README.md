@@ -237,8 +237,10 @@ Full reference:
 | `CRAWLR_COUNTRY` | — | Default country for `crawlr canvas` local stores (ISO code, e.g. `ph`, `us`) |
 | `CRAWLR_GEO` | `true` | Auto-detect the canvas country from your IP when no country/currency is given |
 | `CRAWLR_GEO_TIMEOUT` | `3.0` | Seconds to wait for the IP-geolocation lookup before falling back |
-| `CRAWLR_CANVAS_PER_STORE` | `3` | How many matching listings `crawlr canvas` keeps per store |
-| `CRAWLR_CANVAS_WORKERS` | `6` | Retailers searched concurrently by `crawlr canvas` (1 = serial) |
+| `CRAWLR_CANVAS_PER_STORE` | `6` | How many matching listings `crawlr canvas` keeps per store |
+| `CRAWLR_CANVAS_WORKERS` | `10` | Retailers searched concurrently by `crawlr canvas` (1 = serial) |
+| `CRAWLR_CANVAS_MIN_RESULTS` | `20` | Auto-expand & retry the query until at least this many products are found (0 = off) |
+| `CRAWLR_CANVAS_API_TIMEOUT` | `8` | Timeout (s) for a store's structured-API probe before falling back to HTML |
 
 ## Step-by-step setup guides
 
@@ -541,10 +543,26 @@ the Philippines, it automatically searches Lazada PH, Shopee PH, and Zalora PH. 
 off with `CRAWLR_GEO=false` (fully offline). Add your own shops any time via a YAML file
 (`CRAWLR_CANVAS_RETAILERS`).
 
-**Smart multi-strategy search.** For big marketplaces, Crawlr queries the store's own
-**structured JSON search API** first (the same endpoints their apps use) — so **Lazada and Shopee
-return real products with prices for free**, no fetch provider needed. If an API is unavailable it
-falls back to scraping the HTML search page, auto-rendering JavaScript when required.
+**Behaves like a shopping aggregator, not a scraper.** For each store canvas tries multiple
+strategies in order — the store's **structured JSON search API** first (Lazada's `?ajax=true`,
+Shopee's search API, plus generic **Shopify** and **WooCommerce** Store APIs), then HTML scraping
+with automatic JS rendering. So **Lazada/Shopee and many smaller PH shops return real products with
+prices for free**, no fetch provider needed.
+
+It also:
+
+- **Returns many listings** — up to `--per-store` per shop (default 6), searched concurrently.
+- **Auto-expands the query** when results are thin (plural/singular, drop brand/model, no-space
+  forms like `RTX 5070` → `RTX5070`) until it finds enough — controlled by `CRAWLR_CANVAS_MIN_RESULTS`.
+- **Extracts rich details** — price, original price, **discount %**, rating, reviews, units sold,
+  official-store badge, image, and stock — where the store exposes them.
+- **Computes price intelligence** — lowest/highest/average/median and max savings across all shops.
+- **Sorts** with `--sort price|price_high|rating|reviews|popular|discount|match`.
+
+```bash
+crawlr canvas "mechanical keyboard" --per-store 8 --sort discount   # biggest deals first
+crawlr canvas "rtx 5070" --sort popular                             # best-selling first
+```
 
 > **Heads-up:** the toughest marketplaces (Amazon, or Shopee from a datacenter/VPN IP) may still
 > block automated requests. When that happens Crawlr says so explicitly, and a

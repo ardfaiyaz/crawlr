@@ -377,9 +377,14 @@ def canvas(
         None,
         "--per-store",
         "--limit",
-        help="Max listings to show per store (default: CRAWLR_CANVAS_PER_STORE, 3)",
+        help="Max listings to show per store (default: CRAWLR_CANVAS_PER_STORE, 6)",
     ),
-    js: bool = typer.Option(False, help="Force JS rendering (needs the 'js' extra)"),
+    sort: str = typer.Option(
+        "price",
+        "--sort",
+        help="Order by: price, price_high, rating, reviews, popular, discount, match",
+    ),
+    js: bool = typer.Option(False, help="Force JS rendering (auto-used when a page is blocked)"),
 ) -> None:
     """Find a product across many retailers and compare prices ("canvas").
 
@@ -399,7 +404,7 @@ def canvas(
     _mode_banner()
     names = [r for r in retailers.split(",") if r.strip()] if retailers else None
     report = canvas_mod.search(
-        query, names, base=to, country=country, force_js=js, per_store=per_store
+        query, names, base=to, country=country, force_js=js, per_store=per_store, sort=sort
     )
     hits = report["hits"]
     base = report["base"]
@@ -442,19 +447,48 @@ def canvas(
         console.print(f"[yellow]No matches found for '{query}'.[/yellow]")
         return
 
+    def _compact(n: int | None) -> str:
+        if not n:
+            return "-"
+        if n >= 1_000_000:
+            return f"{n / 1_000_000:.1f}m"
+        if n >= 1_000:
+            return f"{n / 1_000:.1f}k"
+        return str(n)
+
     region_label = f" [{resolved_country.upper()}]" if resolved_country else ""
     table = Table(
-        "Retailer", "Product", "Price", f"In {base}", "Match",
+        "Retailer", "Product", f"Price ({base})", "Was", "Rating", "Sold", "Match",
         title=f"Canvas: {query}{region_label} (FX: {report['fx_source']})",
     )
     for h in hits:
-        native = _price(h.price) + (f" {h.currency}" if h.currency else "")
-        table.add_row(h.retailer, _fmt(h.title), native, _price(h.converted), f"{h.score:.0%}")
+        price_cell = _price(h.converted)
+        if h.discount_pct:
+            price_cell += f" [green]-{h.discount_pct}%[/green]"
+        badge = " [cyan]✓[/cyan]" if h.official else ""
+        rating_cell = f"{h.rating:.1f}★" if h.rating else "-"
+        table.add_row(
+            h.retailer + badge,
+            _fmt(h.title),
+            price_cell,
+            _price(h.original_price) if h.original_price else "-",
+            rating_cell,
+            _compact(h.sold),
+            f"{h.score:.0%}",
+        )
     console.print(table)
 
-    console.print(
-        f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s).[/dim]"
-    )
+    stats = report.get("stats") or {}
+    if stats:
+        console.print(
+            f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s) · "
+            f"{base} {stats['min']:g}–{stats['max']:g} · avg {stats['avg']:g} · "
+            f"median {stats['median']:g} · save up to {stats['savings']:g}[/dim]"
+        )
+    else:
+        console.print(
+            f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s).[/dim]"
+        )
     best = next((h for h in hits if h.converted is not None), None)
     if best:
         console.print(

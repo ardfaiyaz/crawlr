@@ -1,6 +1,6 @@
 [project]
 name = "crawlr"
-version = "0.5.1"
+version = "0.6.0"
 description = "Crawlr: an AI-powered, self-healing web scraper with an e-commerce price-intelligence vertical"
 readme = "README.md"
 requires-python = ">=3.10"

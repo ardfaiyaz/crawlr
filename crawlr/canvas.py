@@ -21,6 +21,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import quote_plus, urldefrag, urljoin
 
 import httpx
@@ -53,6 +54,15 @@ class CanvasHit:
     url: str
     converted: float | None  # price in the base currency (None if not convertible)
     score: float             # 0..1 title-match confidence
+    image: str | None = None
+    rating: float | None = None       # 0..5 stars
+    reviews: int | None = None        # number of ratings/reviews
+    sold: int | None = None           # units sold (popularity)
+    original_price: float | None = None
+    discount_pct: int | None = None
+    in_stock: bool | None = None
+    seller: str | None = None
+    official: bool = False            # official-store / mall badge
 
 
 # --- Structured-API search adapters -----------------------------------------
@@ -75,11 +85,42 @@ def _to_float(value: object) -> float | None:
         return None
 
 
-def _api_get(url: str, headers: dict[str, str]) -> dict:
+def _to_int(value: object) -> int | None:
+    """Parse a count that may be formatted like '1.2k sold' or '3,455'."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if not value:
+        return None
+    s = str(value).lower().replace(",", "").strip()
+    m = re.search(r"([\d.]+)\s*([km]?)", s)
+    if not m:
+        return None
+    try:
+        num = float(m.group(1))
+    except ValueError:
+        return None
+    mult = {"k": 1_000, "m": 1_000_000}.get(m.group(2), 1)
+    return int(num * mult)
+
+
+def _discount_pct(value: object) -> int | None:
+    """Parse a discount like '-13%' or 13 into an int percentage."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return abs(int(value))
+    if not value:
+        return None
+    m = re.search(r"(\d+)", str(value))
+    return int(m.group(1)) if m else None
+
+
+def _api_get(url: str, headers: dict[str, str], timeout: float | None = None) -> Any:
+    """GET a JSON endpoint. Returns the decoded JSON (dict or list)."""
     resp = httpx.get(
         url,
         headers={"User-Agent": config.FETCH.user_agent, "Accept": "application/json", **headers},
-        timeout=config.FETCH.timeout_seconds,
+        timeout=timeout or config.CANVAS_API_TIMEOUT,
         follow_redirects=True,
     )
     resp.raise_for_status()
@@ -100,15 +141,29 @@ def _lazada_adapter(domain: str, ccy: str) -> SearchAdapter:
             name = it.get("name")
             if not name:
                 continue
-            purl = str(it.get("productUrl") or "")
+            purl = str(it.get("itemUrl") or it.get("productUrl") or "")
+            if not purl and it.get("itemId"):
+                purl = f"//{domain}/products/pdp-i{it.get('itemId')}.html"
             if purl.startswith("//"):
                 purl = "https:" + purl
+            image = str(it.get("image") or "")
+            if image.startswith("//"):
+                image = "https:" + image
             out.append(
                 {
                     "title": name,
                     "price": _to_float(it.get("price") or it.get("priceShow")),
+                    "original_price": _to_float(it.get("originalPrice")),
+                    "discount_pct": _discount_pct(it.get("discount")),
                     "currency": ccy,
                     "url": purl,
+                    "image": image or None,
+                    "rating": _to_float(it.get("ratingScore")),
+                    "reviews": _to_int(it.get("review")),
+                    "sold": _to_int(it.get("itemSoldCntShow") or it.get("itemSoldCnt")),
+                    "seller": it.get("sellerName"),
+                    "official": bool(it.get("mallType") or it.get("isLazMall")),
+                    "location": it.get("location"),
                 }
             )
         return out
@@ -123,7 +178,7 @@ def _shopee_adapter(domain: str, ccy: str) -> SearchAdapter:
     def _search(query: str) -> list[dict]:
         api = (
             f"https://{domain}/api/v4/search/search_items?by=relevancy"
-            f"&keyword={quote_plus(query)}&limit=20&newest=0&order=desc"
+            f"&keyword={quote_plus(query)}&limit=60&newest=0&order=desc"
             "&page_type=search&scenario=PAGE_GLOBAL_SEARCH&version=2"
         )
         data = _api_get(
@@ -148,12 +203,133 @@ def _shopee_adapter(domain: str, ccy: str) -> SearchAdapter:
                 if shopid and itemid
                 else f"https://{domain}/search?keyword={quote_plus(query)}"
             )
+            before = basic.get("price_before_discount")
+            image_hash = basic.get("image")
+            rating = (basic.get("item_rating") or {}).get("rating_star")
             out.append(
-                {"title": name, "price": price / 100000.0, "currency": ccy, "url": purl}
+                {
+                    "title": name,
+                    "price": price / 100000.0,
+                    "original_price": (before / 100000.0)
+                    if isinstance(before, (int, float)) and before else None,
+                    "discount_pct": _discount_pct(basic.get("raw_discount")),
+                    "currency": ccy,
+                    "url": purl,
+                    "image": f"https://cf.shopee.ph/file/{image_hash}" if image_hash else None,
+                    "rating": round(float(rating), 1) if isinstance(rating, (int, float)) else None,
+                    "reviews": _to_int(basic.get("cmt_count")),
+                    "sold": _to_int(basic.get("historical_sold") or basic.get("sold")),
+                    "in_stock": (basic.get("stock") or 0) > 0 if basic.get("stock") is not None else None,
+                    "official": bool(basic.get("is_official_shop") or basic.get("shopee_verified")),
+                    "location": basic.get("shop_location"),
+                }
             )
         return out
 
     return _search
+
+
+def _shopify_adapter(domain: str, ccy: str) -> SearchAdapter:
+    """Any Shopify store answers /search/suggest.json with product results."""
+
+    def _search(query: str) -> list[dict]:
+        url = (
+            f"https://{domain}/search/suggest.json?q={quote_plus(query)}"
+            "&resources[type]=product&resources[limit]=10"
+        )
+        data = _api_get(url, {"Referer": f"https://{domain}/"})
+        products = (
+            ((data or {}).get("resources") or {}).get("results") or {}
+        ).get("products") or []
+        out: list[dict] = []
+        for p in products:
+            name = p.get("title")
+            if not name:
+                continue
+            purl = str(p.get("url") or "")
+            if purl.startswith("/"):
+                purl = f"https://{domain}{purl}"
+            # suggest.json prices are decimal strings in the store currency;
+            # only trust a value that clearly looks like money (has a separator).
+            raw_price = p.get("price")
+            price = _to_float(raw_price) if raw_price and re.search(r"[.,]", str(raw_price)) else None
+            out.append(
+                {
+                    "title": name,
+                    "price": price,
+                    "currency": ccy,
+                    "url": purl,
+                    "image": p.get("image") or p.get("featured_image"),
+                    "seller": p.get("vendor"),
+                    "in_stock": p.get("available"),
+                }
+            )
+        return out
+
+    return _search
+
+
+def _woocommerce_adapter(domain: str, ccy: str) -> SearchAdapter:
+    """WooCommerce's public Store API returns products (no auth needed)."""
+
+    def _search(query: str) -> list[dict]:
+        url = f"https://{domain}/wp-json/wc/store/products?search={quote_plus(query)}&per_page=20"
+        data = _api_get(url, {"Referer": f"https://{domain}/"})
+        items: list = data if isinstance(data, list) else []
+        out: list[dict] = []
+        for it in items:
+            name = it.get("name")
+            if not name:
+                continue
+            prices = it.get("prices") or {}
+            unit = int(prices.get("currency_minor_unit") or 2)
+            divisor = 10**unit
+
+            def _minor(v: object) -> float | None:
+                try:
+                    return int(str(v)) / divisor if v not in (None, "") else None
+                except (TypeError, ValueError):
+                    return None
+
+            images = it.get("images") or []
+            out.append(
+                {
+                    "title": name,
+                    "price": _minor(prices.get("price")),
+                    "original_price": _minor(prices.get("regular_price")),
+                    "currency": prices.get("currency_code") or ccy,
+                    "url": it.get("permalink") or "",
+                    "image": images[0].get("src") if images else None,
+                    "in_stock": it.get("is_in_stock"),
+                }
+            )
+        return out
+
+    return _search
+
+
+def _auto_adapter(domain: str, ccy: str) -> SearchAdapter:
+    """Multi-strategy adapter for stores whose platform we don't hardcode: try
+    Shopify then WooCommerce APIs, returning the first that yields products."""
+    strategies = [_shopify_adapter(domain, ccy), _woocommerce_adapter(domain, ccy)]
+
+    def _search(query: str) -> list[dict]:
+        for strat in strategies:
+            try:
+                recs = strat(query)
+            except Exception:  # try the next strategy
+                continue
+            if recs:
+                return recs
+        return []
+
+    return _search
+
+
+def _store(name: str, domain: str, ccy: str = "PHP") -> Retailer:
+    """A retailer whose platform we auto-detect (Shopify/WooCommerce), falling
+    back to scraping its /search page. Covers the many smaller shops."""
+    return Retailer(name, f"https://{domain}/search?q={{q}}", _auto_adapter(domain, ccy))
 
 
 # Global retailers that ship broadly — a sensible default anywhere.
@@ -183,6 +359,13 @@ _REGIONS: dict[str, dict[str, Retailer]] = {
         "zalora": Retailer("Zalora PH", "https://www.zalora.com.ph/search/?q={q}"),
         "galleon": Retailer("Galleon PH", "https://www.galleon.ph/catalogsearch/result/?q={q}"),
         "carousell": Retailer("Carousell PH", "https://www.carousell.ph/search/{q}"),
+        # Smaller PH tech/retail shops (platform auto-detected: Shopify/WooCommerce).
+        "datablitz": _store("DataBlitz", "www.datablitz.com.ph"),
+        "dynaquest": _store("DynaQuest PC", "dynaquestpc.com"),
+        "easypc": _store("EasyPC", "easypc.com.ph"),
+        "pcexpress": _store("PC Express", "pcexpress.com.ph"),
+        "gamextreme": _store("GameXtreme", "www.gamextreme.ph"),
+        "villman": _store("Villman", "villman.com"),
         "aliexpress": _ALIEXPRESS,
         "amazon": _GLOBAL["amazon"],
         "ebay": _GLOBAL["ebay"],
@@ -569,16 +752,13 @@ def _top_matches(
         if _is_junk_title(raw_title):
             continue
         title = _clean_title(raw_title)
-        links = _links_to_product(rec.get("url"), search_url)
-        # A bare echo of the search box that doesn't link to a real detail page
-        # is a heading, not a product listing.
-        if not links and _norm(title) == _norm(query):
+        # A real listing links to its own distinct product page; search-page
+        # headings / query echoes link back to the search page (or nowhere).
+        if not _links_to_product(rec.get("url"), search_url):
             continue
         score = _score(query, title)
-        # Real product cards carry a price and link to a detail page — reward both.
+        # Real product cards carry a price — small reward as a tie-breaker.
         if isinstance(rec.get("price"), (int, float)):
-            score += 0.05
-        if links:
             score += 0.05
         if score < _MATCH_THRESHOLD:
             continue
@@ -633,6 +813,10 @@ def _search_one(
         price = rec.get("price") if isinstance(rec.get("price"), (int, float)) else None
         native_ccy = rec.get("currency")
         converted = currency.convert(price, native_ccy or base_ccy, base_ccy, rates)
+        orig = rec.get("original_price") if isinstance(rec.get("original_price"), (int, float)) else None
+        discount = rec.get("discount_pct")
+        if discount is None and orig and price and orig > price:
+            discount = round((orig - price) / orig * 100)
         hits.append(
             CanvasHit(
                 retailer=retailer.name,
@@ -642,9 +826,85 @@ def _search_one(
                 url=urljoin(url, rec.get("url")) if rec.get("url") else url,
                 converted=converted,
                 score=match["score"],
+                image=rec.get("image"),
+                rating=rec.get("rating") if isinstance(rec.get("rating"), (int, float)) else None,
+                reviews=rec.get("reviews") if isinstance(rec.get("reviews"), int) else None,
+                sold=rec.get("sold") if isinstance(rec.get("sold"), int) else None,
+                original_price=orig,
+                discount_pct=int(discount) if discount else None,
+                in_stock=rec.get("in_stock"),
+                seller=rec.get("seller"),
+                official=bool(rec.get("official")),
             )
         )
     return ("ok" if hits else "nomatch"), hits
+
+
+def _expand_query(query: str) -> list[str]:
+    """Ordered query variants to widen coverage when results are thin: no-space
+    and spaced-digit forms, plural/singular, and dropping the model/brand token."""
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def add(v: str) -> None:
+        v = v.strip()
+        if v and v.lower() not in seen:
+            seen.add(v.lower())
+            variants.append(v)
+
+    q = query.strip()
+    add(q)
+    add(_norm(q))                       # "60HE" -> "60 he"
+    add(re.sub(r"\s+", "", q))          # collapse spaces: "rtx 5070" -> "rtx5070"
+    add(q[:-1] if q.lower().endswith("s") else q + "s")  # plural/singular
+    tokens = q.split()
+    if len(tokens) > 1:
+        add(" ".join(tokens[:-1]))      # drop trailing model/spec token
+        add(" ".join(tokens[1:]))       # drop leading brand token
+    return variants
+
+
+def _dedup_key(h: CanvasHit) -> tuple:
+    return (h.retailer.lower(), (h.url or "").lower() or _norm(h.title))
+
+
+def _sort_hits(hits: list[CanvasHit], sort: str) -> list[CanvasHit]:
+    """Order hits by the requested key; price-less/unknown values sink last."""
+    def price_key(h: CanvasHit) -> tuple:
+        return (h.converted is None, h.converted if h.converted is not None else 0.0)
+
+    if sort == "price_high":
+        hits.sort(key=lambda h: (h.converted is None, -(h.converted or 0.0)))
+    elif sort == "rating":
+        hits.sort(key=lambda h: (h.rating is None, -(h.rating or 0.0)))
+    elif sort == "reviews":
+        hits.sort(key=lambda h: (h.reviews is None, -(h.reviews or 0)))
+    elif sort in ("popular", "sold"):
+        hits.sort(key=lambda h: (h.sold is None, -(h.sold or 0)))
+    elif sort == "discount":
+        hits.sort(key=lambda h: (h.discount_pct is None, -(h.discount_pct or 0)))
+    elif sort == "match":
+        hits.sort(key=lambda h: -h.score)
+    else:  # "price" (cheapest first) — the default
+        hits.sort(key=price_key)
+    return hits
+
+
+def _price_stats(hits: list[CanvasHit]) -> dict:
+    """Min/max/avg/median (+ savings) over the converted prices we have."""
+    import statistics
+
+    vals = sorted(h.converted for h in hits if h.converted is not None)
+    if not vals:
+        return {}
+    return {
+        "min": round(vals[0], 2),
+        "max": round(vals[-1], 2),
+        "avg": round(statistics.mean(vals), 2),
+        "median": round(statistics.median(vals), 2),
+        "savings": round(vals[-1] - vals[0], 2),
+        "count": len(vals),
+    }
 
 
 def search(
@@ -654,6 +914,8 @@ def search(
     country: str | None = None,
     force_js: bool = False,
     per_store: int | None = None,
+    sort: str = "price",
+    expand: bool | None = None,
 ) -> dict:
     """Search each retailer for ``query`` and return ranked price hits.
 
@@ -661,8 +923,9 @@ def search(
     resolved in this order: ``CRAWLR_COUNTRY`` > the explicit ``base`` currency >
     IP geolocation (auto) > the default reporting currency > global stores.
 
-    Up to ``per_store`` listings are kept per retailer (default
-    ``CRAWLR_CANVAS_PER_STORE``), and retailers are searched concurrently.
+    Retailers are searched concurrently, up to ``per_store`` listings each. If
+    fewer than ``CRAWLR_CANVAS_MIN_RESULTS`` products are found, the query is
+    automatically expanded (plural/singular, drop brand/model, …) and retried.
     """
     per = per_store if per_store and per_store > 0 else config.CANVAS_PER_STORE
     resolved_country, country_source = _resolve_country(
@@ -672,7 +935,6 @@ def search(
     rates, fx_source = currency.get_rates()
     # Display currency: an explicit --to wins; otherwise price in the detected
     # country's own currency (e.g. PH -> PHP); else fall back to CRAWLR_FX_BASE.
-    # Guard against a currency the rate table can't convert.
     candidate = (base or _country_currency(resolved_country) or config.FX_BASE).upper()
     base_ccy = candidate if candidate in rates else config.FX_BASE.upper()
     if base_ccy not in rates:
@@ -682,32 +944,59 @@ def search(
     )
     selected = _select(retailers, catalog)
 
-    hits: list[CanvasHit] = []
-    blocked: list[str] = []
-    errored: list[str] = []
+    def _run_all(q: str) -> tuple[list[CanvasHit], list[str], list[str]]:
+        hits_: list[CanvasHit] = []
+        blocked_: list[str] = []
+        errored_: list[str] = []
 
-    def _run(r: Retailer) -> tuple[Retailer, str, list[CanvasHit]]:
-        status, rhits = _search_one(r, query, base_ccy, rates, per, force_js)
-        return r, status, rhits
+        def _run(r: Retailer) -> tuple[Retailer, str, list[CanvasHit]]:
+            status, rhits = _search_one(r, q, base_ccy, rates, per, force_js)
+            return r, status, rhits
 
-    workers = min(len(selected), config.CANVAS_WORKERS) if selected else 1
-    if workers > 1:
-        from concurrent.futures import ThreadPoolExecutor
+        workers = min(len(selected), config.CANVAS_WORKERS) if selected else 1
+        if workers > 1:
+            from concurrent.futures import ThreadPoolExecutor
 
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            outcomes = list(pool.map(_run, selected))
-    else:
-        outcomes = [_run(r) for r in selected]
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                outcomes = list(pool.map(_run, selected))
+        else:
+            outcomes = [_run(r) for r in selected]
+        for retailer, status, rhits in outcomes:
+            if status == "blocked":
+                blocked_.append(retailer.name)
+            elif status == "error":
+                errored_.append(retailer.name)
+            hits_.extend(rhits)
+        return hits_, blocked_, errored_
 
-    for retailer, status, rhits in outcomes:
-        if status == "blocked":
-            blocked.append(retailer.name)
-        elif status == "error":
-            errored.append(retailer.name)
-        hits.extend(rhits)
+    hits, blocked, errored = _run_all(query)
+    seen = {_dedup_key(h) for h in hits}
+    tried = [query]
 
-    # Cheapest first; hits without a convertible price sink to the bottom.
-    hits.sort(key=lambda h: (h.converted is None, h.converted if h.converted is not None else 0.0))
+    # Auto-retry with expanded queries until we hit the coverage threshold.
+    do_expand = config.CANVAS_MIN_RESULTS > 0 if expand is None else expand
+    if do_expand and len(hits) < config.CANVAS_MIN_RESULTS:
+        for variant in _expand_query(query)[1:]:  # [0] is the original query
+            if len(hits) >= config.CANVAS_MIN_RESULTS:
+                break
+            extra, _, _ = _run_all(variant)
+            tried.append(variant)
+            for h in extra:
+                key = _dedup_key(h)
+                if key not in seen:
+                    seen.add(key)
+                    hits.append(h)
+
+    _sort_hits(hits, sort)
+    # Cap the final results per store (expansion may have gathered extras).
+    if per:
+        capped: list[CanvasHit] = []
+        counts: dict[str, int] = {}
+        for h in hits:
+            if counts.get(h.retailer, 0) < per:
+                capped.append(h)
+                counts[h.retailer] = counts.get(h.retailer, 0) + 1
+        hits = capped
     return {
         "query": query,
         "base": base_ccy,
@@ -716,8 +1005,10 @@ def search(
         "country_source": country_source,
         "fx_source": fx_source,
         "retailers_searched": [r.name for r in selected],
+        "queries_tried": tried,
         "blocked": blocked,
         "errored": errored,
         "shops": len({h.retailer for h in hits}),
+        "stats": _price_stats(hits),
         "hits": hits,
     }

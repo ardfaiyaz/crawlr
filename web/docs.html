@@ -20,7 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
-        <span class="ver">v0.5.1</span>
+        <span class="ver">v0.6.0</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -239,11 +239,25 @@
       <code>CRAWLR_CANVAS_PER_STORE</code>). Search-page chrome ("Results for …", bare query echoes)
       is filtered out for accuracy, and stores that block bots are listed with a hint to turn on a
       <a href="#config-provider">fetch provider</a>.</p>
-      <p><strong>Smart multi-strategy search.</strong> For big marketplaces, Crawlr queries the
-      store's own <strong>structured JSON search API</strong> first (the endpoints their apps use) —
-      so <strong>Lazada and Shopee return real products with prices for free</strong>, no fetch
-      provider needed. If an API is unavailable it falls back to scraping the HTML page, rendering
-      JavaScript automatically when needed.</p>
+      <p><strong>Behaves like a shopping aggregator, not a scraper.</strong> For each store, canvas
+      tries several strategies in order — the store's own <strong>structured JSON search API</strong>
+      first (Lazada's <code>?ajax=true</code>, Shopee's search API, plus generic <strong>Shopify</strong>
+      and <strong>WooCommerce</strong> Store APIs), then HTML scraping with automatic JS rendering. So
+      <strong>Lazada/Shopee and many smaller PH shops return real products with prices for free</strong>,
+      no fetch provider needed.</p>
+      <ul>
+        <li><strong>Many listings</strong> — up to <code>--per-store</code> per shop (default 6),
+        searched concurrently.</li>
+        <li><strong>Auto-expands the query</strong> when results are thin (plural/singular, drop
+        brand/model, no-space forms like <code>RTX 5070</code> → <code>RTX5070</code>) until it finds
+        enough (<code>CRAWLR_CANVAS_MIN_RESULTS</code>).</li>
+        <li><strong>Rich details</strong> — price, original price, discount %, rating, reviews, units
+        sold, official-store badge, image, stock.</li>
+        <li><strong>Price intelligence</strong> — lowest/highest/average/median and max savings.</li>
+        <li><strong>Sorting</strong> — <code>--sort price|price_high|rating|reviews|popular|discount|match</code>.</li>
+      </ul>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr canvas "mechanical keyboard" --per-store 8 --sort discount</span>  <span class="c"># biggest deals first</span>
+<span class="p">crawlr canvas "rtx 5070" --sort popular</span>                          <span class="c"># best-selling first</span></pre></div>
       <p><strong>Note:</strong> the toughest marketplaces (Amazon, or Shopee from a datacenter/VPN IP)
       may still block automated requests — Crawlr says so explicitly, and a
       <a href="#config-provider">fetch provider</a> is the most reliable fallback.</p>
@@ -442,8 +456,10 @@
           <tr><td><code>CRAWLR_COUNTRY</code></td><td>—</td><td>Default country for <code>crawlr canvas</code> local stores (ISO code, e.g. <code>ph</code>, <code>us</code>)</td></tr>
           <tr><td><code>CRAWLR_GEO</code></td><td><code>true</code></td><td>Auto-detect the canvas country from your IP when no country/currency is given</td></tr>
           <tr><td><code>CRAWLR_GEO_TIMEOUT</code></td><td><code>3.0</code></td><td>Seconds to wait for the IP-geolocation lookup before falling back</td></tr>
-          <tr><td><code>CRAWLR_CANVAS_PER_STORE</code></td><td><code>3</code></td><td>How many matching listings <code>crawlr canvas</code> keeps per store</td></tr>
-          <tr><td><code>CRAWLR_CANVAS_WORKERS</code></td><td><code>6</code></td><td>Retailers searched concurrently by <code>crawlr canvas</code> (1 = serial)</td></tr>
+          <tr><td><code>CRAWLR_CANVAS_PER_STORE</code></td><td><code>6</code></td><td>How many matching listings <code>crawlr canvas</code> keeps per store</td></tr>
+          <tr><td><code>CRAWLR_CANVAS_WORKERS</code></td><td><code>10</code></td><td>Retailers searched concurrently by <code>crawlr canvas</code> (1 = serial)</td></tr>
+          <tr><td><code>CRAWLR_CANVAS_MIN_RESULTS</code></td><td><code>20</code></td><td>Auto-expand &amp; retry the query until at least this many products are found (0 = off)</td></tr>
+          <tr><td><code>CRAWLR_CANVAS_API_TIMEOUT</code></td><td><code>8</code></td><td>Timeout (s) for a store's structured-API probe before falling back to HTML</td></tr>
           <tr><td><code>CRAWLR_MIN_FIELD_CONFIDENCE</code></td><td><code>0.0</code></td><td>Minimum confidence before alerting on a field</td></tr>
           <tr><td><code>CRAWLR_API_KEY</code></td><td>—</td><td>Protects the JSON API when set</td></tr>
         </tbody>

@@ -149,9 +149,15 @@ CANVAS_GEO_CACHE_PATH = DATA_DIR / "geo_country.json"
 CANVAS_GEO_CACHE_HOURS = float(os.getenv("CRAWLR_GEO_CACHE_HOURS", "168"))  # 7 days
 
 # How many matching listings to keep per store (more = a fuller comparison).
-CANVAS_PER_STORE = max(1, int(os.getenv("CRAWLR_CANVAS_PER_STORE", "3")))
+CANVAS_PER_STORE = max(1, int(os.getenv("CRAWLR_CANVAS_PER_STORE", "6")))
 # Search retailers concurrently with up to this many worker threads (1 = serial).
-CANVAS_WORKERS = max(1, int(os.getenv("CRAWLR_CANVAS_WORKERS", "6")))
+CANVAS_WORKERS = max(1, int(os.getenv("CRAWLR_CANVAS_WORKERS", "10")))
+# Structured-API probe timeout (seconds) — shorter than the full fetch timeout so
+# stores without a usable API fail fast instead of stalling the whole search.
+CANVAS_API_TIMEOUT = float(os.getenv("CRAWLR_CANVAS_API_TIMEOUT", "8"))
+# Keep expanding the query (plural/singular, drop brand/model, no-space, …) and
+# retrying until at least this many products are found. 0 disables expansion.
+CANVAS_MIN_RESULTS = max(0, int(os.getenv("CRAWLR_CANVAS_MIN_RESULTS", "20")))
 
 # Hosted API: when set, the JSON API requires this key (X-API-Key or Bearer).
 # Left unset, the API is open (fine for local use).

@@ -272,3 +272,90 @@ def test_canvas_filters_view_all_ads(monkeypatch):
     titles = [h.title for h in report["hits"]]
     assert "MAD60 HE Keyboard" in titles
     assert all("View all" not in t for t in titles)  # heading rejected
+
+
+
+def test_expand_query_variants():
+    variants = canvas._expand_query("RTX 5070")
+    assert variants[0] == "RTX 5070"
+    joined = " | ".join(variants).lower()
+    assert "rtx5070" in joined   # no-space form
+    assert "5070" in joined      # brand dropped
+    assert "rtx" in joined       # model dropped
+
+
+def test_canvas_auto_expands_when_results_low(monkeypatch):
+    mapping = {"amazon": [{"title": "MAD60 HE Keyboard", "price": 100.0, "currency": "USD", "url": "/p/1"}]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("mad60 he", retailers=["amazon"], base="USD")
+    assert len(report["queries_tried"]) > 1          # expanded because < min results
+    report2 = canvas.search("mad60 he", retailers=["amazon"], base="USD", expand=False)
+    assert report2["queries_tried"] == ["mad60 he"]  # expansion off
+
+
+def test_price_stats():
+    def hit(p):
+        return canvas.CanvasHit("S", "x", p, "USD", "http://s/" + str(p), p, 0.9)
+    stats = canvas._price_stats([hit(100.0), hit(200.0), hit(300.0)])
+    assert stats["min"] == 100.0 and stats["max"] == 300.0
+    assert stats["avg"] == 200.0 and stats["median"] == 200.0
+    assert stats["savings"] == 200.0 and stats["count"] == 3
+
+
+def test_sort_hits_by_rating_and_price():
+    a = canvas.CanvasHit("A", "x", 1.0, "USD", "u1", 1.0, 0.9, rating=3.0)
+    b = canvas.CanvasHit("B", "y", 2.0, "USD", "u2", 2.0, 0.9, rating=4.8)
+    assert canvas._sort_hits([a, b], "rating")[0].rating == 4.8
+    assert canvas._sort_hits([a, b], "price")[0].converted == 1.0
+
+
+def test_lazada_adapter_rich_fields(monkeypatch):
+    payload = {"mods": {"listItems": [{
+        "name": "MAD60 HE", "price": "3499", "originalPrice": "3999", "discount": "-13%",
+        "ratingScore": "4.8", "review": "120", "itemSoldCntShow": "1.2k sold",
+        "productUrl": "https://www.lazada.com.ph/p/x.html", "image": "//img.lazada/x.jpg",
+        "sellerName": "KB Store", "mallType": "1",
+    }]}}
+    monkeypatch.setattr(canvas, "_api_get", lambda url, headers, timeout=None: payload)
+    recs = canvas._lazada_adapter("www.lazada.com.ph", "PHP")("mad60 he")
+    r = recs[0]
+    assert r["rating"] == 4.8 and r["reviews"] == 120 and r["sold"] == 1200
+    assert r["original_price"] == 3999.0 and r["discount_pct"] == 13
+    assert r["official"] is True and r["image"].startswith("https://")
+
+
+def test_shopify_adapter_parses(monkeypatch):
+    payload = {"resources": {"results": {"products": [
+        {"title": "MAD60 HE", "price": "3,499.00", "url": "/products/mad60",
+         "image": "https://img", "vendor": "KB", "available": True}
+    ]}}}
+    monkeypatch.setattr(canvas, "_api_get", lambda url, headers, timeout=None: payload)
+    recs = canvas._shopify_adapter("shop.example", "PHP")("mad60")
+    assert recs[0]["title"] == "MAD60 HE" and recs[0]["price"] == 3499.0
+    assert recs[0]["url"] == "https://shop.example/products/mad60"
+
+
+def test_woocommerce_adapter_parses(monkeypatch):
+    payload = [{
+        "name": "MAD60 HE",
+        "prices": {"price": "349900", "regular_price": "399900",
+                   "currency_minor_unit": 2, "currency_code": "PHP"},
+        "permalink": "https://shop.example/p/mad60",
+        "images": [{"src": "https://img"}], "is_in_stock": True,
+    }]
+    monkeypatch.setattr(canvas, "_api_get", lambda url, headers, timeout=None: payload)
+    recs = canvas._woocommerce_adapter("shop.example", "PHP")("mad60")
+    assert recs[0]["price"] == 3499.0 and recs[0]["original_price"] == 3999.0
+    assert recs[0]["in_stock"] is True
+
+
+def test_canvas_hit_carries_rich_fields(monkeypatch):
+    payload = {"mods": {"listItems": [{
+        "name": "MAD60 HE Keyboard", "price": "3499", "ratingScore": "4.8",
+        "review": "120", "productUrl": "https://www.lazada.com.ph/p/x.html",
+    }]}}
+    monkeypatch.setattr(canvas, "_api_get", lambda url, headers, timeout=None: payload)
+    report = canvas.search("mad60 he", retailers=["lazada"], base="PHP", country="ph", expand=False)
+    hit = next(h for h in report["hits"] if h.retailer == "Lazada PH")
+    assert hit.rating == 4.8 and hit.reviews == 120
+    assert report["stats"]["count"] >= 1

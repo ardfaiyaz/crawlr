@@ -6,6 +6,31 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0]
+
+### Added
+- **Canvas is now a shopping aggregator.** Each store is searched with multiple
+  strategies (structured JSON API first, then HTML + auto JS rendering):
+  - Generic **Shopify** (`/search/suggest.json`) and **WooCommerce**
+    (`/wp-json/wc/store/products`) adapters, plus a multi-strategy auto-adapter,
+    unlocking many smaller PH shops (DataBlitz, DynaQuest, EasyPC, PC Express,
+    GameXtreme, Villman, …).
+  - Enriched Lazada/Shopee adapters return **rich product details**: original
+    price, discount %, rating, reviews, units sold, official-store badge, image,
+    stock.
+- **Query expansion + auto-retry** — when results are below
+  `CRAWLR_CANVAS_MIN_RESULTS` (default 20), canvas retries with expanded queries
+  (plural/singular, drop brand/model, no-space forms) and merges/dedupes results.
+- **Price intelligence** — report and CLI now show lowest/highest/average/median
+  price and max savings across shops.
+- **Sorting** — `--sort price|price_high|rating|reviews|popular|discount|match`.
+- More results by default: `CRAWLR_CANVAS_PER_STORE` 3 → 6, `CRAWLR_CANVAS_WORKERS`
+  6 → 10; new `CRAWLR_CANVAS_API_TIMEOUT` for fast structured-API probes.
+
+### Changed
+- A canvas result must link to a **distinct product page**, which robustly rejects
+  search-page headings / query echoes even across expanded queries.
+
 ## [0.5.1]
 
 ### Added
