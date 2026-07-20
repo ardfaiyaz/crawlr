@@ -21,6 +21,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -42,10 +43,10 @@
         <a href="#how" class="hide-sm">How it works</a>
         <a href="docs.html">Docs</a>
         <a class="icon-link" href="https://pypi.org/project/crawlr/" target="_blank" rel="noopener" aria-label="PyPI">
-          <img src="https://cdn.simpleicons.org/pypi/0e1a12" alt="PyPI" width="22" height="22">
+          <i class="fa-brands fa-python" aria-hidden="true"></i>
         </a>
         <a class="icon-link" href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener" aria-label="GitHub">
-          <img src="https://cdn.simpleicons.org/github/0e1a12" alt="GitHub" width="22" height="22">
+          <i class="fa-brands fa-github" aria-hidden="true"></i>
         </a>
       </div>
     </div>
@@ -64,7 +65,7 @@
         <a class="btn btn-solid" href="#how">Get started</a>
         <button class="copychip" type="button" data-copy="pip install crawlr">
           <span class="mono">$ pip install crawlr</span>
-          <span class="copychip-icon" aria-hidden="true">⧉</span>
+          <span class="copychip-icon" aria-hidden="true"><i class="fa-regular fa-copy"></i></span>
         </button>
       </div>
       <div class="terminal" data-aos="fade-up" data-aos-delay="220">
@@ -85,10 +86,10 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
       <h2 data-aos="fade-up">Who it's for</h2>
       <p class="section-sub" data-aos="fade-up">If you need to know when something on the web changes, Crawlr is for you.</p>
       <div class="grid usecase-grid">
-        <div class="card" data-aos="fade-up"><div class="tile">₵</div><h3>Competitor price intelligence</h3><p>Track rivals' prices across many products and react before they undercut you.</p></div>
-        <div class="card" data-aos="fade-up" data-aos-delay="60"><div class="tile">▼</div><h3>Deal &amp; price-drop alerts</h3><p>Get pinged the moment a product hits your target price.</p></div>
-        <div class="card" data-aos="fade-up" data-aos-delay="120"><div class="tile">✦</div><h3>Back-in-stock monitoring</h3><p>Never miss a restock on hard-to-get items.</p></div>
-        <div class="card" data-aos="fade-up" data-aos-delay="180"><div class="tile">◈</div><h3>Jobs, real-estate &amp; news</h3><p>Bundled presets track listings and headlines — or add your own vertical.</p></div>
+        <div class="card" data-aos="fade-up"><div class="tile"><i class="fa-solid fa-arrow-trend-up fa-fade" aria-hidden="true"></i></div><h3>Competitor price intelligence</h3><p>Track rivals' prices across many products and react before they undercut you.</p></div>
+        <div class="card" data-aos="fade-up" data-aos-delay="60"><div class="tile"><i class="fa-solid fa-arrow-trend-down fa-fade" aria-hidden="true"></i></div><h3>Deal &amp; price-drop alerts</h3><p>Get pinged the moment a product hits your target price.</p></div>
+        <div class="card" data-aos="fade-up" data-aos-delay="120"><div class="tile"><i class="fa-solid fa-box-open fa-bounce" aria-hidden="true"></i></div><h3>Back-in-stock monitoring</h3><p>Never miss a restock on hard-to-get items.</p></div>
+        <div class="card" data-aos="fade-up" data-aos-delay="180"><div class="tile"><i class="fa-solid fa-newspaper fa-fade" aria-hidden="true"></i></div><h3>Jobs, real-estate &amp; news</h3><p>Bundled presets track listings and headlines — or add your own vertical.</p></div>
       </div>
     </div>
   </section>
@@ -99,15 +100,15 @@ Watching site #1 (trigger=price_below, target $25, every 60m)
       <h2 data-aos="fade-up">Everything you need to monitor a market</h2>
       <p class="section-sub" data-aos="fade-up">Built for continuous, hands-off competitor monitoring.</p>
       <div class="bento">
-        <div class="card" data-aos="fade-right"><div class="tile">↻</div><div><h3>Self-healing selectors</h3><p>Detects breakage after a redesign and regenerates selectors automatically — no maintenance.</p></div></div>
-        <div class="card" data-aos="fade-left"><div class="tile">$</div><div><h3>Price &amp; stock tracking</h3><p>Watch any product's price and availability, with full history and change detection.</p></div></div>
-        <div class="card" data-aos="fade-right"><div class="tile">!</div><div><h3>Flexible alert triggers</h3><p>Alert on any change, price drops, a target price, or back-in-stock — your choice, per watch.</p></div></div>
-        <div class="card" data-aos="fade-left"><div class="tile">⌘</div><div><h3>Rules template</h3><p>Describe what happens in different circumstances in one editable <code>crawlr.rules.yaml</code>.</p></div></div>
-        <div class="card" data-aos="fade-right"><div class="tile">◇</div><div><h3>Any site, no code</h3><p>Ships with e-commerce schemas; add new verticals (jobs, real estate) as simple YAML.</p></div></div>
-        <div class="card" data-aos="fade-left"><div class="tile">⚑</div><div><h3>Alerts anywhere</h3><p>Webhook, Slack, and email notifications when something you care about changes.</p></div></div>
-        <div class="card" data-aos="fade-right"><div class="tile">∅</div><div><h3>Runs free &amp; offline</h3><p>Works with zero API keys via the heuristic engine. Add an OpenAI key only if you want.</p></div></div>
-        <div class="card" data-aos="fade-left"><div class="tile">⧉</div><div><h3>Anti-bot resilience</h3><p>Proxy rotation, robots.txt compliance, request jitter, and JS rendering when needed.</p></div></div>
-        <div class="card" data-aos="fade-right"><div class="tile">⇅</div><div><h3>Scales quietly</h3><p>Concurrent monitoring, a built-in scheduler daemon, and SQLite or Postgres storage.</p></div></div>
+        <div class="card" data-aos="fade-right"><div class="tile"><i class="fa-solid fa-arrows-rotate fa-spin" aria-hidden="true"></i></div><div><h3>Self-healing selectors</h3><p>Detects breakage after a redesign and regenerates selectors automatically — no maintenance.</p></div></div>
+        <div class="card" data-aos="fade-left"><div class="tile"><i class="fa-solid fa-tag fa-fade" aria-hidden="true"></i></div><div><h3>Price &amp; stock tracking</h3><p>Watch any product's price and availability, with full history and change detection.</p></div></div>
+        <div class="card" data-aos="fade-right"><div class="tile"><i class="fa-solid fa-bell fa-beat" aria-hidden="true"></i></div><div><h3>Flexible alert triggers</h3><p>Alert on any change, price drops, a target price, or back-in-stock — your choice, per watch.</p></div></div>
+        <div class="card" data-aos="fade-left"><div class="tile"><i class="fa-solid fa-sliders fa-fade" aria-hidden="true"></i></div><div><h3>Rules template</h3><p>Describe what happens in different circumstances in one editable <code>crawlr.rules.yaml</code>.</p></div></div>
+        <div class="card" data-aos="fade-right"><div class="tile"><i class="fa-solid fa-code fa-fade" aria-hidden="true"></i></div><div><h3>Any site, no code</h3><p>Ships with e-commerce schemas; add new verticals (jobs, real estate) as simple YAML.</p></div></div>
+        <div class="card" data-aos="fade-left"><div class="tile"><i class="fa-solid fa-paper-plane fa-fade" aria-hidden="true"></i></div><div><h3>Alerts anywhere</h3><p>Webhook, Slack, and email notifications when something you care about changes.</p></div></div>
+        <div class="card" data-aos="fade-right"><div class="tile"><i class="fa-solid fa-bolt fa-fade" aria-hidden="true"></i></div><div><h3>Runs free &amp; offline</h3><p>Works with zero API keys via the heuristic engine. Add an OpenAI key only if you want.</p></div></div>
+        <div class="card" data-aos="fade-left"><div class="tile"><i class="fa-solid fa-shield-halved fa-fade" aria-hidden="true"></i></div><div><h3>Anti-bot resilience</h3><p>Proxy rotation, robots.txt compliance, request jitter, and JS rendering when needed.</p></div></div>
+        <div class="card" data-aos="fade-right"><div class="tile"><i class="fa-solid fa-server fa-fade" aria-hidden="true"></i></div><div><h3>Scales quietly</h3><p>Concurrent monitoring, a built-in scheduler daemon, and SQLite or Postgres storage.</p></div></div>
       </div>
     </div>
   </section>

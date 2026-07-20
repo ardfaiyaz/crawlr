@@ -232,6 +232,164 @@ Full reference:
 | `CRAWLR_FETCH_PROVIDER_RENDER` | `true` | Ask the provider to render JavaScript (costs more credits) |
 | `CRAWLR_CANVAS_RETAILERS` | — | Path to a YAML file adding your own stores to `crawlr canvas` |
 
+## Step-by-step setup guides
+
+Every integration below follows the same pattern: **get the URL/key from the service, set the
+variable, then run `crawlr test-alert` (for alerts) or `crawlr doctor` (for everything else) to
+confirm it works.** Set variables with `export VAR=value` (macOS/Linux), `$env:VAR="value"`
+(Windows PowerShell), or a `.env` file.
+
+### Discord alerts
+
+1. Open Discord and go to the **server** you manage where you want alerts.
+2. Click the server name → **Server Settings**.
+3. Go to **Integrations** → **Webhooks** → **New Webhook**.
+4. Pick the channel it should post in, optionally rename it, then click **Copy Webhook URL**.
+5. Set it and test:
+
+```bash
+export CRAWLR_ALERT_DISCORD="https://discord.com/api/webhooks/…"
+crawlr test-alert
+```
+
+### Slack alerts
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**; pick your workspace.
+2. Open **Incoming Webhooks** and turn it **On**.
+3. Click **Add New Webhook to Workspace**, choose a channel, and **Allow**.
+4. Copy the webhook URL, then set it:
+
+```bash
+export CRAWLR_ALERT_SLACK="https://hooks.slack.com/services/…"
+```
+
+### Telegram alerts
+
+1. In Telegram, message **@BotFather**, send `/newbot`, and follow the prompts. Copy the **bot token**.
+2. Open a chat with your new bot and send it `/start` (a bot can't message you until you do).
+3. Message **@userinfobot** — it replies with your numeric **chat id**.
+4. Set both:
+
+```bash
+export CRAWLR_ALERT_TELEGRAM_TOKEN="123456:ABC-your-token"
+export CRAWLR_ALERT_TELEGRAM_CHAT_ID="123456789"
+```
+
+### ntfy alerts (free phone push, no account)
+
+1. Choose a hard-to-guess topic name, e.g. `my-crawlr-a7f3`. Your URL is `https://ntfy.sh/my-crawlr-a7f3`.
+2. Install the **ntfy** app (iOS/Android) — or open the URL in a browser — and **subscribe** to that topic.
+3. Set it:
+
+```bash
+export CRAWLR_ALERT_NTFY="https://ntfy.sh/my-crawlr-a7f3"
+```
+
+### Microsoft Teams alerts
+
+1. In Teams, hover the channel → **⋯** → **Workflows** (older tenants: **Connectors → Incoming Webhook**).
+2. Pick the "post to a channel when a webhook request is received" template and create it.
+3. Copy the generated URL and set it:
+
+```bash
+export CRAWLR_ALERT_TEAMS="https://…webhook…url…"
+```
+
+### Email alerts (SMTP)
+
+1. Get your provider's SMTP details. For Gmail: enable 2-step verification, then create an **App Password** (Google Account → Security → App passwords).
+2. Set the recipient and server:
+
+```bash
+export CRAWLR_ALERT_EMAIL_TO="you@example.com"
+export CRAWLR_SMTP_HOST="smtp.gmail.com"
+export CRAWLR_SMTP_PORT="587"
+export CRAWLR_SMTP_USER="you@gmail.com"
+export CRAWLR_SMTP_PASSWORD="your-app-password"
+```
+
+### Any generic webhook
+
+1. Use any endpoint that accepts an HTTP POST with JSON. To try it out, grab a free URL from [webhook.site](https://webhook.site).
+2. Set it (optionally sign the payloads so your receiver can verify them):
+
+```bash
+export CRAWLR_ALERT_WEBHOOK="https://webhook.site/your-id"
+export CRAWLR_WEBHOOK_SECRET="any-shared-secret"   # optional; adds X-Crawlr-Signature
+```
+
+> **Tip:** enable several channels at once, add `CRAWLR_ALERT_THROTTLE_MINUTES=60` to avoid repeat
+> pings, and prefer a daily summary with `crawlr digest --send`.
+
+### AI mode — OpenAI
+
+Crawlr runs free and offline by default; a key only helps on unusual layouts (it runs once per site).
+
+1. Go to [platform.openai.com](https://platform.openai.com) and sign in.
+2. Account menu (top-right) → **API keys** → **Create new secret key** → copy it (shown once, starts with `sk-`).
+3. Add a payment method under **Settings → Billing**.
+4. Set it:
+
+```bash
+export CRAWLR_LLM_PROVIDER="openai"
+export CRAWLR_LLM_API_KEY="sk-..."
+```
+
+### AI mode — Anthropic
+
+1. Go to [console.anthropic.com](https://console.anthropic.com) and sign in.
+2. Open **API keys** → **Create Key** → copy it (starts with `sk-ant-`).
+3. Set it:
+
+```bash
+export CRAWLR_LLM_PROVIDER="anthropic"
+export CRAWLR_LLM_API_KEY="sk-ant-..."
+```
+
+### Postgres storage (free hosted)
+
+1. Create a free project at [neon.tech](https://neon.tech) (or supabase.com / railway.app).
+2. Copy the **connection string** — `postgresql://user:pass@host:5432/dbname`.
+3. Install the extra and set the URL:
+
+```bash
+pip install "crawlr[postgres]"
+export CRAWLR_DATABASE_URL="postgresql://user:pass@host:5432/dbname"
+crawlr doctor
+```
+
+### Fetch provider (for big marketplaces)
+
+1. Sign up at [scraperapi.com](https://www.scraperapi.com) (or scrapingbee.com / zyte.com); free trial tiers exist.
+2. Copy the **API key** from the dashboard.
+3. Set the backend and key, then verify:
+
+```bash
+export CRAWLR_FETCH_PROVIDER="scraperapi"   # or scrapingbee | zyte | custom
+export CRAWLR_FETCH_PROVIDER_KEY="your-key"
+crawlr doctor
+```
+
+### Currency conversion
+
+`crawlr compare` / `crawlr canvas` convert prices to one currency so you can compare fairly.
+
+```bash
+export CRAWLR_FX_BASE="PHP"                     # compare everything in pesos
+export CRAWLR_FX_LIVE="true"                    # live rates (cached); else pinned table
+export CRAWLR_FX_RATES="EUR=0.92,GBP=0.79"      # optional: pin specific rates (units per USD)
+crawlr fx --amount 100 --from EUR --to USD      # quick one-off conversion
+```
+
+### Proxies
+
+1. Get one or more proxy URLs from your proxy provider (format `http://user:pass@host:port`).
+2. Comma-separate them; Crawlr rotates between them:
+
+```bash
+export CRAWLR_PROXIES="http://user:pass@host:port,http://host2:port"
+```
+
 ## Examples
 
 Ready-to-run recipes live in [`examples/`](./examples) — watch competitors, use a

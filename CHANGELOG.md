@@ -6,7 +6,28 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0]
+
 ### Added
+- **Multi-strategy extraction fallbacks** — product name, price, image, and other
+  fields are now recovered through several strategies (structured data, cached
+  selectors, and heuristic fallbacks) so more sites yield complete data.
+- **Pluggable fetch-provider backend** — route fetches through an unblocking/render
+  service for big marketplaces via `CRAWLR_FETCH_PROVIDER`
+  (`scraperapi`/`scrapingbee`/`zyte`/`custom`) + `CRAWLR_FETCH_PROVIDER_KEY`.
+- **Canvas** — `crawlr canvas "<product name>"` suggests which retailers likely
+  carry a product so you can compare across stores, plus `CRAWLR_CANVAS_RETAILERS`
+  to add your own stores.
+- **Graceful network-error handling** — DNS/connection failures no longer crash a
+  monitor run; the site is retried next cycle instead of recording bad data.
+- **Step-by-step setup guides** — README and the website docs now walk through
+  obtaining every credential (Discord/Slack/Telegram/ntfy/Teams/email webhooks,
+  OpenAI/Anthropic keys, hosted Postgres, fetch-provider keys, proxies, FX).
+- **Website icon refresh** — all UI icons migrated to the Font Awesome icon
+  library with subtle, accessibility-aware animations (replacing broken CDN
+  glyph images).
+
+### Added (previously unreleased)
 - **Zero-config schema detection** — `crawlr watch <url>` auto-detects product,
   product list, jobs, real estate, and news pages (JSON-LD, microdata,
   OpenGraph, and URL heuristics). `--schema` still overrides.

@@ -27,11 +27,11 @@
     chip.addEventListener("click", function () {
       navigator.clipboard.writeText(chip.getAttribute("data-copy")).then(function () {
         var icon = chip.querySelector(".copychip-icon");
-        var original = icon ? icon.textContent : "";
-        if (icon) icon.textContent = "✓";
+        var original = icon ? icon.innerHTML : "";
+        if (icon) icon.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i>';
         chip.classList.add("copied");
         setTimeout(function () {
-          if (icon) icon.textContent = original;
+          if (icon) icon.innerHTML = original;
           chip.classList.remove("copied");
         }, 1200);
       });

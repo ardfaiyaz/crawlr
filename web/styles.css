@@ -351,6 +351,21 @@ footer { border-top: 1px solid var(--line); padding: 3rem 0 2rem; color: var(--m
 /* ---- Extra hover effects ---- */
 .card .tile { transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease; }
 .card:hover .tile { background: var(--green); color: #fff; border-color: var(--green); }
+
+/* ---- Icon library (Font Awesome) ---- */
+.tile i { font-size: 1.2rem; line-height: 1; }
+.usecase-grid .card .tile i { font-size: 1.4rem; }
+.icon-link { font-size: 1.2rem; }
+.icon-link i { transition: transform 0.18s ease; }
+.icon-link:hover i { transform: translateY(-2px) scale(1.1); }
+.copychip-icon i { font-size: 0.95rem; }
+.copychip:hover .copychip-icon i { animation: copypop 0.45s ease; }
+@keyframes copypop { 0% { transform: scale(1); } 45% { transform: scale(1.25) rotate(-8deg); } 100% { transform: scale(1); } }
+/* slow a couple of the busier animations so the page stays calm */
+.tile .fa-spin { --fa-animation-duration: 6s; }
+.tile .fa-fade { --fa-animation-duration: 3s; --fa-fade-opacity: 0.55; }
+.tile .fa-beat { --fa-animation-duration: 2.4s; --fa-beat-scale: 1.15; }
+.tile .fa-bounce { --fa-animation-duration: 3s; }
 .pill { transition: all 0.15s ease; }
 .pill:hover { background: var(--green); color: #fff; border-color: var(--green); transform: translateY(-1px); }
 .btn-solid:hover { box-shadow: 0 10px 24px rgba(42, 104, 51, 0.28); }

@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -25,7 +26,7 @@
         <a href="index.html#features" class="hide-sm">Features</a>
         <a href="docs.html">Docs</a>
         <a class="icon-link" href="https://github.com/ardfaiyaz/crawlr" target="_blank" rel="noopener" aria-label="GitHub">
-          <img src="https://cdn.simpleicons.org/github/0e1a12" alt="GitHub" width="22" height="22">
+          <i class="fa-brands fa-github" aria-hidden="true"></i>
         </a>
       </div>
     </div>
@@ -213,30 +214,101 @@
       <a href="#config-reference">full reference table</a> at the end.</p>
 
       <h3 id="config-ai">AI mode (LLM) — optional, improves accuracy</h3>
-      <p>Crawlr runs <strong>free and offline</strong> by default using a heuristic. Adding an
-      OpenAI or Anthropic key only helps on unusual layouts, and the model runs <em>once per
-      site</em> so cost stays tiny.</p>
-      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash — enable OpenAI</span></div><pre><span class="p">export CRAWLR_LLM_PROVIDER="openai"</span>       <span class="c"># or "anthropic", or "none" (default)</span>
-<span class="p">export CRAWLR_LLM_API_KEY="sk-..."</span>        <span class="c"># your provider key</span>
-<span class="p">export CRAWLR_LLM_MAX_CALLS="2"</span>           <span class="c"># cap calls per scrape (cost guard)</span></pre></div>
+      <p>Crawlr runs <strong>free and offline</strong> by default. Adding an OpenAI or Anthropic key
+      only helps on unusual layouts, and the model runs <em>once per site</em> so cost stays tiny.</p>
+      <p><strong>OpenAI — get a key:</strong></p>
+      <ol>
+        <li>Go to <a href="https://platform.openai.com" target="_blank" rel="noopener">platform.openai.com</a> and sign in.</li>
+        <li>Open the account menu (top-right) → <strong>API keys</strong> → <strong>Create new secret key</strong>.</li>
+        <li>Copy the key now — it's only shown once (starts with <code>sk-</code>).</li>
+        <li>Add a payment method under <strong>Settings → Billing</strong> (API usage needs credit).</li>
+        <li>Set it:</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_LLM_PROVIDER="openai"</span>
+<span class="p">export CRAWLR_LLM_API_KEY="sk-..."</span>
+<span class="p">export CRAWLR_LLM_MAX_CALLS="2"</span>   <span class="c"># optional: cap calls per scrape (cost guard)</span></pre></div>
+      <p><strong>Anthropic — get a key:</strong></p>
+      <ol>
+        <li>Go to <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> and sign in.</li>
+        <li>Open <strong>API keys</strong> → <strong>Create Key</strong> → copy it (starts with <code>sk-ant-</code>).</li>
+        <li>Set it:</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_LLM_PROVIDER="anthropic"</span>
+<span class="p">export CRAWLR_LLM_API_KEY="sk-ant-..."</span></pre></div>
+      <p>To go back to free offline mode: <code>export CRAWLR_LLM_PROVIDER="none"</code>.</p>
 
-      <h3 id="config-alerts">Alerts &amp; notifications</h3>
-      <p>Set any of these and Crawlr will notify you there. Set several and it uses all of them.
-      Verify your setup any time with <code>crawlr test-alert</code>.</p>
-      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash — pick the channels you want</span></div><pre><span class="p">export CRAWLR_ALERT_DISCORD="https://discord.com/api/webhooks/..."</span>
-<span class="p">export CRAWLR_ALERT_SLACK="https://hooks.slack.com/services/..."</span>
-<span class="p">export CRAWLR_ALERT_NTFY="https://ntfy.sh/my-crawlr-alerts"</span>   <span class="c"># free phone push</span>
-<span class="p">export CRAWLR_ALERT_TELEGRAM_TOKEN="123:abc"</span>                 <span class="c"># from @BotFather</span>
-<span class="p">export CRAWLR_ALERT_TELEGRAM_CHAT_ID="123456"</span>
-<span class="p">export CRAWLR_ALERT_WEBHOOK="https://webhook.site/your-id"</span>    <span class="c"># any generic webhook</span>
+      <h3 id="config-alerts">Alerts &amp; notifications — step by step</h3>
+      <p>Pick a channel below, follow the steps to get its URL/token, set the variable, then run
+      <code>crawlr test-alert</code> to confirm the message arrives. You can enable several at once.</p>
 
-<span class="p">crawlr test-alert</span>   <span class="c"># sends a test message to every channel above</span></pre></div>
-      <p>Extra alert controls:</p>
-      <ul>
-        <li><code>CRAWLR_ALERT_THROTTLE_MINUTES=60</code> — don't repeat the same alert within an hour.</li>
-        <li><code>CRAWLR_WEBHOOK_SECRET=…</code> — sign generic-webhook payloads (<code>X-Crawlr-Signature</code>).</li>
-        <li>Prefer a daily summary over per-change pings? Use <code>crawlr digest --send</code> or run <code>crawlr monitor --daemon --digest 24</code>.</li>
-      </ul>
+      <h4>Discord</h4>
+      <ol>
+        <li>Open Discord and go to the <strong>server</strong> you manage where you want alerts.</li>
+        <li>Click the server name → <strong>Server Settings</strong>.</li>
+        <li>Go to <strong>Integrations</strong> → <strong>Webhooks</strong> → <strong>New Webhook</strong>.</li>
+        <li>Choose the channel it should post in, (optionally) rename it, then click <strong>Copy Webhook URL</strong>.</li>
+        <li>Set it and test:</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_ALERT_DISCORD="https://discord.com/api/webhooks/…"</span>
+<span class="p">crawlr test-alert</span></pre></div>
+
+      <h4>Slack</h4>
+      <ol>
+        <li>Go to <a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a> → <strong>Create New App</strong> → <strong>From scratch</strong>; pick your workspace.</li>
+        <li>Open <strong>Incoming Webhooks</strong> and switch it <strong>On</strong>.</li>
+        <li>Click <strong>Add New Webhook to Workspace</strong>, choose a channel, and <strong>Allow</strong>.</li>
+        <li>Copy the webhook URL, then set it:</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_ALERT_SLACK="https://hooks.slack.com/services/…"</span></pre></div>
+
+      <h4>Telegram</h4>
+      <ol>
+        <li>In Telegram, message <strong>@BotFather</strong>, send <code>/newbot</code>, and follow the prompts. Copy the <strong>bot token</strong> it gives you.</li>
+        <li>Open a chat with your new bot and send it <code>/start</code> (a bot can't message you until you do).</li>
+        <li>Message <strong>@userinfobot</strong> — it replies with your numeric <strong>chat id</strong>.</li>
+        <li>Set both:</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_ALERT_TELEGRAM_TOKEN="123456:ABC-your-token"</span>
+<span class="p">export CRAWLR_ALERT_TELEGRAM_CHAT_ID="123456789"</span></pre></div>
+
+      <h4>ntfy — free phone push, no account</h4>
+      <ol>
+        <li>Choose a hard-to-guess topic name, e.g. <code>my-crawlr-a7f3</code>. Your URL is <code>https://ntfy.sh/my-crawlr-a7f3</code>.</li>
+        <li>Install the <strong>ntfy</strong> app (iOS/Android) — or open the URL in a browser — and <strong>subscribe</strong> to that topic.</li>
+        <li>Set it:</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_ALERT_NTFY="https://ntfy.sh/my-crawlr-a7f3"</span></pre></div>
+
+      <h4>Microsoft Teams</h4>
+      <ol>
+        <li>In Teams, hover the channel → <strong>⋯</strong> → <strong>Workflows</strong> (older tenants: <strong>Connectors → Incoming Webhook</strong>).</li>
+        <li>Pick the "post to a channel when a webhook request is received" template and create it.</li>
+        <li>Copy the generated URL and set it:</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_ALERT_TEAMS="https://…webhook…url…"</span></pre></div>
+
+      <h4>Email (SMTP)</h4>
+      <ol>
+        <li>Get your provider's SMTP details. For Gmail: enable 2-step verification, then create an <strong>App Password</strong> (Google Account → Security → App passwords) and use that as the password.</li>
+        <li>Set the recipient and server:</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_ALERT_EMAIL_TO="you@example.com"</span>
+<span class="p">export CRAWLR_SMTP_HOST="smtp.gmail.com"</span>
+<span class="p">export CRAWLR_SMTP_PORT="587"</span>
+<span class="p">export CRAWLR_SMTP_USER="you@gmail.com"</span>
+<span class="p">export CRAWLR_SMTP_PASSWORD="your-app-password"</span></pre></div>
+
+      <h4>Any generic webhook</h4>
+      <ol>
+        <li>Use any endpoint that accepts an HTTP POST with JSON. To try it out, grab a free URL from <a href="https://webhook.site" target="_blank" rel="noopener">webhook.site</a>.</li>
+        <li>Set it (optionally sign the payloads so your receiver can verify them):</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_ALERT_WEBHOOK="https://webhook.site/your-id"</span>
+<span class="p">export CRAWLR_WEBHOOK_SECRET="any-shared-secret"</span>   <span class="c"># optional; adds X-Crawlr-Signature</span></pre></div>
+
+      <p><strong>Fine-tuning:</strong> add <code>CRAWLR_ALERT_THROTTLE_MINUTES=60</code> so the same
+      alert can't repeat within an hour. Prefer a daily summary over per-change pings? Use
+      <code>crawlr digest --send</code> or run <code>crawlr monitor --daemon --digest 24</code>.</p>
 
       <h3 id="config-fx">Currency conversion</h3>
       <p><code>crawlr compare</code> and <code>crawlr canvas</code> can compare prices across
@@ -254,6 +326,13 @@
       <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_FETCH_PROVIDER="scraperapi"</span>   <span class="c"># or scrapingbee | zyte | custom</span>
 <span class="p">export CRAWLR_FETCH_PROVIDER_KEY="your-key"</span>
 <span class="p">crawlr doctor</span>                              <span class="c"># confirms the provider is set</span></pre></div>
+      <p><strong>Getting a key (ScraperAPI shown; ScrapingBee &amp; Zyte are the same idea):</strong></p>
+      <ol>
+        <li>Sign up at <a href="https://www.scraperapi.com" target="_blank" rel="noopener">scraperapi.com</a> (there's a free trial tier).</li>
+        <li>Open your <strong>dashboard</strong> and copy the <strong>API key</strong> shown there.</li>
+        <li>Set the two variables above (<code>CRAWLR_FETCH_PROVIDER="scraperapi"</code> and your key), then run <code>crawlr doctor</code>.</li>
+        <li>Watch a marketplace URL as normal — Crawlr now routes that fetch through the provider automatically.</li>
+      </ol>
       <p>Most providers offer a free tier to start. Any other "URL in → HTML out" service works via
       <code>CRAWLR_FETCH_PROVIDER=custom</code> plus <code>CRAWLR_FETCH_PROVIDER_ENDPOINT</code>,
       <code>_URL_PARAM</code>, <code>_KEY_PARAM</code>/<code>_KEY_HEADER</code>, <code>_EXTRA</code>,
@@ -271,6 +350,15 @@
       multiple workers, point it at Postgres — the same code runs on both.</p>
       <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">export CRAWLR_DATABASE_URL="postgresql://user:pass@localhost:5432/crawlr"</span>
 <span class="p">export CRAWLR_DATA_DIR="./.crawlr"</span>   <span class="c"># where the DB, cache & snapshots live</span></pre></div>
+      <p><strong>Easiest: a free hosted Postgres (Neon shown; Supabase/Railway are the same idea):</strong></p>
+      <ol>
+        <li>Create a free project at <a href="https://neon.tech" target="_blank" rel="noopener">neon.tech</a> (or supabase.com / railway.app).</li>
+        <li>Copy the <strong>connection string</strong> — it looks like <code>postgresql://user:pass@host:5432/dbname</code>.</li>
+        <li>Install the Postgres extra and set the URL:</li>
+      </ol>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">pip install "crawlr[postgres]"</span>
+<span class="p">export CRAWLR_DATABASE_URL="postgresql://user:pass@host:5432/dbname"</span>
+<span class="p">crawlr doctor</span>   <span class="c"># verifies the connection</span></pre></div>
 
       <h3 id="config-reference">Full reference</h3>
       <table>
