@@ -29,6 +29,9 @@ _PINNED_RATES: dict[str, float] = {
     "PHP": 58.5, "BRL": 5.4, "AUD": 1.51, "CAD": 1.36, "CNY": 7.24,
     "KRW": 1370.0, "RUB": 90.0, "NZD": 1.65, "CHF": 0.89, "SEK": 10.6,
     "MXN": 18.5, "SGD": 1.35, "HKD": 7.81,
+    # South-East Asia (approximate; enable CRAWLR_FX_LIVE for live figures).
+    "MYR": 4.7, "IDR": 16000.0, "THB": 36.5, "VND": 25400.0, "TWD": 32.3,
+    "AED": 3.67,
 }
 
 

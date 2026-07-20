@@ -373,6 +373,12 @@ def canvas(
         "--region",
         help="Country for local stores, e.g. ph, sg, us (default: from currency/CRAWLR_COUNTRY)",
     ),
+    per_store: int = typer.Option(
+        None,
+        "--per-store",
+        "--limit",
+        help="Max listings to show per store (default: CRAWLR_CANVAS_PER_STORE, 3)",
+    ),
     js: bool = typer.Option(False, help="Force JS rendering (needs the 'js' extra)"),
 ) -> None:
     """Find a product across many retailers and compare prices ("canvas").
@@ -392,7 +398,9 @@ def canvas(
 
     _mode_banner()
     names = [r for r in retailers.split(",") if r.strip()] if retailers else None
-    report = canvas_mod.search(query, names, base=to, country=country, force_js=js)
+    report = canvas_mod.search(
+        query, names, base=to, country=country, force_js=js, per_store=per_store
+    )
     hits = report["hits"]
     base = report["base"]
     resolved_country = report.get("country")
@@ -405,22 +413,28 @@ def canvas(
         "currency-default": "default currency",
     }
 
+    ccy_note = " · prices in {}".format(base)
+    if report.get("currency_source") == "country":
+        ccy_note = f" · prices in {base} (your region's currency)"
     if resolved_country:
         searched = ", ".join(report.get("retailers_searched", [])) or "—"
         note = _source_note.get(country_source or "", "")
         suffix = f" ({note})" if note else ""
         console.print(
-            f"[dim]Region: {resolved_country.upper()}{suffix} · searching: {searched}[/dim]"
+            f"[dim]Region: {resolved_country.upper()}{suffix}{ccy_note} · "
+            f"searching: {searched}[/dim]"
         )
     else:
         console.print(
-            "[dim]No region set — searching global stores. Add --country ph "
+            f"[dim]No region set — searching global stores{ccy_note}. Add --country ph "
             "(or --to PHP) to include local marketplaces like Lazada & Shopee.[/dim]"
         )
-    if cfg.FETCH_PROVIDER == "direct":
+
+    blocked = report.get("blocked", [])
+    if blocked and cfg.FETCH_PROVIDER == "direct":
         console.print(
-            "[dim]Tip: set CRAWLR_FETCH_PROVIDER (e.g. scraperapi) to reach marketplaces "
-            "that block bots (Lazada, Shopee, Amazon).[/dim]"
+            f"[dim]{len(blocked)} store(s) blocked bots ({', '.join(blocked)}). "
+            "Set CRAWLR_FETCH_PROVIDER (e.g. scraperapi) to include them.[/dim]"
         )
     if not hits:
         console.print(f"[yellow]No matches found for '{query}'.[/yellow]")
@@ -436,6 +450,9 @@ def canvas(
         table.add_row(h.retailer, _fmt(h.title), native, _price(h.converted), f"{h.score:.0%}")
     console.print(table)
 
+    console.print(
+        f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s).[/dim]"
+    )
     best = next((h for h in hits if h.converted is not None), None)
     if best:
         console.print(

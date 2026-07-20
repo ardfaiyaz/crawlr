@@ -235,6 +235,8 @@ Full reference:
 | `CRAWLR_COUNTRY` | — | Default country for `crawlr canvas` local stores (ISO code, e.g. `ph`, `us`) |
 | `CRAWLR_GEO` | `true` | Auto-detect the canvas country from your IP when no country/currency is given |
 | `CRAWLR_GEO_TIMEOUT` | `3.0` | Seconds to wait for the IP-geolocation lookup before falling back |
+| `CRAWLR_CANVAS_PER_STORE` | `3` | How many matching listings `crawlr canvas` keeps per store |
+| `CRAWLR_CANVAS_WORKERS` | `6` | Retailers searched concurrently by `crawlr canvas` (1 = serial) |
 
 ## Step-by-step setup guides
 
@@ -504,18 +506,27 @@ local currency with `--to` — and Crawlr searches that country's stores instead
 
 | Country | `--country` | Local stores it searches |
 |---------|-------------|--------------------------|
-| Philippines | `ph` | Lazada PH, Shopee PH, Zalora PH, AliExpress |
+| Philippines | `ph` | Lazada PH, Shopee PH, Zalora PH, Galleon PH, Carousell PH, AliExpress, Amazon, eBay |
 | Singapore | `sg` | Lazada SG, Shopee SG, Amazon SG, AliExpress |
 | Malaysia | `my` | Lazada MY, Shopee MY, AliExpress |
 | Indonesia | `id` | Lazada ID, Shopee ID, Tokopedia, AliExpress |
 | Thailand | `th` | Lazada TH, Shopee TH, AliExpress |
 | Vietnam | `vn` | Lazada VN, Shopee VN, Tiki, AliExpress |
-| United States | `us` | Amazon, eBay, Walmart, Newegg, Best Buy |
+| United States | `us` | Amazon, eBay, Walmart, Newegg, Best Buy, Target |
 | United Kingdom | `gb` | Amazon UK, eBay UK, Currys, AliExpress |
 | India | `in` | Amazon IN, Flipkart, AliExpress |
 | Australia | `au` | Amazon AU, eBay AU, AliExpress |
 | Japan | `jp` | Amazon JP, AliExpress |
 | Canada | `ca` | Amazon CA, eBay CA, Newegg CA |
+
+**Prices are shown in your region's own currency automatically.** When a country is
+detected, canvas converts every listing into that country's currency (e.g. PH → ₱ PHP) with no
+`--to` needed — so you compare like-for-like. Override any time with `--to USD`.
+
+**Many listings, ranked, in parallel.** Canvas searches all the stores concurrently and keeps the
+top matches from each (default 3 per store — change with `--per-store 5`). Results that are search-page
+chrome rather than real products (e.g. "Results for …") are filtered out, so what you see is accurate.
+Stores that block bots are listed explicitly with a hint to enable a fetch provider.
 
 **How the country is chosen** (first match wins):
 

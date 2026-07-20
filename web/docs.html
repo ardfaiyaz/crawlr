@@ -20,7 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
-        <span class="ver">v0.4.1</span>
+        <span class="ver">v0.4.2</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -198,7 +198,8 @@
       <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr canvas "Wooting 60HE"</span>                          <span class="c"># global stores</span>
 <span class="p">crawlr canvas "MAD60 HE" --country ph</span>                 <span class="c"># Lazada PH, Shopee PH, Zalora PH…</span>
 <span class="p">crawlr canvas "Wooting 60HE" --to PHP</span>                 <span class="c"># infers --country ph from the currency</span>
-<span class="p">crawlr canvas "Wooting 60HE" --retailers amazon,ebay --to USD</span></pre></div>
+<span class="p">crawlr canvas "Wooting 60HE" --retailers amazon,ebay --to USD</span>
+<span class="p">crawlr canvas "mechanical keyboard" --per-store 5</span>   <span class="c"># up to 5 listings per store</span></pre></div>
       <p><strong>Canvas is location-aware.</strong> Pass <code>--country</code> (an ISO code like
       <code>ph</code>, <code>sg</code>, <code>us</code>) — or set <code>CRAWLR_COUNTRY</code>, or just
       use a local currency with <code>--to</code> — and Crawlr searches that country's stores instead
@@ -206,13 +207,13 @@
       <table>
         <thead><tr><th>Country</th><th><code>--country</code></th><th>Local stores it searches</th></tr></thead>
         <tbody>
-          <tr><td>Philippines</td><td><code>ph</code></td><td>Lazada PH, Shopee PH, Zalora PH, AliExpress</td></tr>
+          <tr><td>Philippines</td><td><code>ph</code></td><td>Lazada PH, Shopee PH, Zalora PH, Galleon PH, Carousell PH, AliExpress, Amazon, eBay</td></tr>
           <tr><td>Singapore</td><td><code>sg</code></td><td>Lazada SG, Shopee SG, Amazon SG, AliExpress</td></tr>
           <tr><td>Malaysia</td><td><code>my</code></td><td>Lazada MY, Shopee MY, AliExpress</td></tr>
           <tr><td>Indonesia</td><td><code>id</code></td><td>Lazada ID, Shopee ID, Tokopedia, AliExpress</td></tr>
           <tr><td>Thailand</td><td><code>th</code></td><td>Lazada TH, Shopee TH, AliExpress</td></tr>
           <tr><td>Vietnam</td><td><code>vn</code></td><td>Lazada VN, Shopee VN, Tiki, AliExpress</td></tr>
-          <tr><td>United States</td><td><code>us</code></td><td>Amazon, eBay, Walmart, Newegg, Best Buy</td></tr>
+          <tr><td>United States</td><td><code>us</code></td><td>Amazon, eBay, Walmart, Newegg, Best Buy, Target</td></tr>
           <tr><td>United Kingdom</td><td><code>gb</code></td><td>Amazon UK, eBay UK, Currys, AliExpress</td></tr>
           <tr><td>India</td><td><code>in</code></td><td>Amazon IN, Flipkart, AliExpress</td></tr>
           <tr><td>Australia</td><td><code>au</code></td><td>Amazon AU, eBay AU, AliExpress</td></tr>
@@ -227,6 +228,14 @@
       automatically searches Lazada PH, Shopee PH &amp; Zalora PH. Disable the IP lookup with
       <code>CRAWLR_GEO=false</code> (fully offline). Add your own shops with a YAML file
       (<code>CRAWLR_CANVAS_RETAILERS</code>).</p>
+      <p><strong>Prices in your own currency.</strong> When a country is detected, canvas converts
+      every listing into that country's currency automatically (e.g. PH → ₱ PHP), so you compare
+      like-for-like without passing <code>--to</code>. Override any time with <code>--to USD</code>.</p>
+      <p><strong>Many listings, ranked, in parallel.</strong> Canvas searches every store at once and
+      keeps the top matches from each (default 3 — set <code>--per-store 5</code> or
+      <code>CRAWLR_CANVAS_PER_STORE</code>). Search-page chrome ("Results for …", bare query echoes)
+      is filtered out for accuracy, and stores that block bots are listed with a hint to turn on a
+      <a href="#config-provider">fetch provider</a>.</p>
       <p><strong>Important:</strong> local marketplaces like <strong>Lazada and Shopee block bots</strong>
       (just like Amazon). For real results from them, set up a
       <a href="#config-provider">fetch provider</a> first — otherwise those rows show "blocked or
@@ -424,6 +433,8 @@
           <tr><td><code>CRAWLR_COUNTRY</code></td><td>—</td><td>Default country for <code>crawlr canvas</code> local stores (ISO code, e.g. <code>ph</code>, <code>us</code>)</td></tr>
           <tr><td><code>CRAWLR_GEO</code></td><td><code>true</code></td><td>Auto-detect the canvas country from your IP when no country/currency is given</td></tr>
           <tr><td><code>CRAWLR_GEO_TIMEOUT</code></td><td><code>3.0</code></td><td>Seconds to wait for the IP-geolocation lookup before falling back</td></tr>
+          <tr><td><code>CRAWLR_CANVAS_PER_STORE</code></td><td><code>3</code></td><td>How many matching listings <code>crawlr canvas</code> keeps per store</td></tr>
+          <tr><td><code>CRAWLR_CANVAS_WORKERS</code></td><td><code>6</code></td><td>Retailers searched concurrently by <code>crawlr canvas</code> (1 = serial)</td></tr>
           <tr><td><code>CRAWLR_MIN_FIELD_CONFIDENCE</code></td><td><code>0.0</code></td><td>Minimum confidence before alerting on a field</td></tr>
           <tr><td><code>CRAWLR_API_KEY</code></td><td>—</td><td>Protects the JSON API when set</td></tr>
         </tbody>

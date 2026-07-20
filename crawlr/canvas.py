@@ -20,7 +20,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus, urldefrag, urljoin
 
 from . import config, currency
 from .extractor import scrape
@@ -65,7 +65,11 @@ _REGIONS: dict[str, dict[str, Retailer]] = {
         "lazada": Retailer("Lazada PH", "https://www.lazada.com.ph/catalog/?q={q}"),
         "shopee": Retailer("Shopee PH", "https://shopee.ph/search?keyword={q}"),
         "zalora": Retailer("Zalora PH", "https://www.zalora.com.ph/search/?q={q}"),
+        "galleon": Retailer("Galleon PH", "https://www.galleon.ph/catalogsearch/result/?q={q}"),
+        "carousell": Retailer("Carousell PH", "https://www.carousell.ph/search/{q}"),
         "aliexpress": _ALIEXPRESS,
+        "amazon": _GLOBAL["amazon"],
+        "ebay": _GLOBAL["ebay"],
     },
     "sg": {
         "lazada": Retailer("Lazada SG", "https://www.lazada.sg/catalog/?q={q}"),
@@ -101,6 +105,7 @@ _REGIONS: dict[str, dict[str, Retailer]] = {
         "walmart": _GLOBAL["walmart"],
         "newegg": _GLOBAL["newegg"],
         "bestbuy": Retailer("Best Buy", "https://www.bestbuy.com/site/searchpage.jsp?st={q}"),
+        "target": Retailer("Target", "https://www.target.com/s?searchTerm={q}"),
     },
     "gb": {
         "amazon": Retailer("Amazon UK", "https://www.amazon.co.uk/s?k={q}"),
@@ -135,6 +140,18 @@ _CCY_COUNTRY: dict[str, str] = {
     "VND": "vn", "USD": "us", "GBP": "gb", "INR": "in", "AUD": "au",
     "JPY": "jp", "CAD": "ca",
 }
+
+# The local currency for each supported country, so canvas can price results in
+# the shopper's own currency when a country is detected (no --to needed).
+_COUNTRY_CCY: dict[str, str] = {
+    "ph": "PHP", "sg": "SGD", "my": "MYR", "id": "IDR", "th": "THB",
+    "vn": "VND", "us": "USD", "gb": "GBP", "in": "INR", "au": "AUD",
+    "jp": "JPY", "ca": "CAD",
+}
+
+
+def _country_currency(country: str | None) -> str | None:
+    return _COUNTRY_CCY.get(country) if country else None
 
 # Minimum title-similarity for a search result to count as "the product".
 _MATCH_THRESHOLD = 0.3
@@ -329,15 +346,63 @@ def _select(names: list[str] | None, catalog: dict[str, Retailer]) -> list[Retai
     return chosen
 
 
+# Search/category-page chrome that is not an actual product listing. These get
+# scraped by mistake on JS-heavy pages, so we reject them outright.
+_JUNK_RE = re.compile(
+    r"^(results?|search results?|showing|no results|did you mean|sponsored|"
+    r"related searches|filters?|sort by|categories?|see all|view all|"
+    r"best sellers?|recommended|you may also|price|shop by)\b"
+    r"|results? for\b|search results?\b",
+    re.IGNORECASE,
+)
+
+
+def _norm(s: str) -> str:
+    """Lowercase, collapse whitespace, and split letter<->digit boundaries so
+    'Wooting 60HE' and 'wooting 60 he' match ('60he' -> '60 he')."""
+    s = s.lower().strip()
+    s = re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", s)
+    return re.sub(r"\s+", " ", s)
+
+
+def _clean_title(title: object) -> str:
+    """Strip surrounding quotes/whitespace a search page often wraps around the
+    echoed query, e.g. '"logitech mouse"' -> 'logitech mouse'."""
+    return str(title).strip().strip("\"'\u201c\u201d").strip()
+
+
+def _is_junk_title(title: str | None) -> bool:
+    """True if ``title`` looks like search/category page chrome (e.g. 'Results
+    for X', 'Search results', 'Sort by') rather than a real product name."""
+    if not title:
+        return True
+    t = _clean_title(title)
+    if len(t) < 3:
+        return True
+    return bool(_JUNK_RE.search(t))
+
+
+def _links_to_product(rec_url: object, search_url: str | None) -> bool:
+    """A real listing links to a *distinct* detail page — not back to the search
+    page (or just a #fragment of it, or nowhere)."""
+    if not rec_url:
+        return False
+    if not search_url:
+        return True
+    resolved = urldefrag(urljoin(search_url, str(rec_url)))[0]
+    return resolved != urldefrag(search_url)[0]
+
+
 def _score(query: str, title: str | None) -> float:
     """0..1 confidence that ``title`` is the product named by ``query``.
 
     Token overlap dominates (a match should contain the query's words), with the
-    character-level sequence ratio as a tie-breaker.
+    character-level sequence ratio as a tie-breaker. Normalization makes
+    '60HE' == '60 he'.
     """
     if not title:
         return 0.0
-    q, t = query.lower().strip(), title.lower().strip()
+    q, t = _norm(query), _norm(title)
     words = [w for w in re.split(r"\W+", q) if w]
     ratio = difflib.SequenceMatcher(None, q, t).ratio()
     if not words:
@@ -346,18 +411,80 @@ def _score(query: str, title: str | None) -> float:
     return round(0.8 * overlap + 0.2 * ratio, 4)
 
 
-def _best_match(query: str, records: list[dict]) -> dict | None:
-    best, best_score = None, 0.0
+def _top_matches(
+    query: str, records: list[dict], limit: int, search_url: str | None = None
+) -> list[dict]:
+    """Return up to ``limit`` best product matches, junk-filtered and deduped."""
+    scored: list[tuple[float, str, dict]] = []
+    seen: set[tuple] = set()
     for rec in records:
-        score = _score(query, rec.get("title"))
-        # Prefer results that actually carry a price.
+        raw_title = rec.get("title")
+        if _is_junk_title(raw_title):
+            continue
+        title = _clean_title(raw_title)
+        links = _links_to_product(rec.get("url"), search_url)
+        # A bare echo of the search box that doesn't link to a real detail page
+        # is a heading, not a product listing.
+        if not links and _norm(title) == _norm(query):
+            continue
+        score = _score(query, title)
+        # Real product cards carry a price and link to a detail page — reward both.
         if isinstance(rec.get("price"), (int, float)):
             score += 0.05
-        if score > best_score:
-            best, best_score = rec, score
-    if best is None or best_score < _MATCH_THRESHOLD:
-        return None
-    return {"rec": best, "score": round(min(best_score, 1.0), 2)}
+        if links:
+            score += 0.05
+        if score < _MATCH_THRESHOLD:
+            continue
+        key = (title.lower(), rec.get("url"))
+        if key in seen:
+            continue
+        seen.add(key)
+        scored.append((min(score, 1.0), title, rec))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [
+        {"rec": rec, "score": round(sc, 2), "title": title}
+        for sc, title, rec in scored[: max(1, limit)]
+    ]
+
+
+def _search_one(
+    retailer: Retailer,
+    query: str,
+    base_ccy: str,
+    rates: dict,
+    per_store: int,
+    force_js: bool,
+) -> tuple[str, list[CanvasHit]]:
+    """Search a single retailer. Returns ``(status, hits)`` where status is one
+    of ``ok`` / ``blocked`` / ``error`` / ``nomatch``. Never raises."""
+    url = retailer.search_url.format(q=quote_plus(query))
+    try:
+        result = scrape(url, ecommerce.PRODUCT_LIST_SCHEMA, force_js=force_js)
+    except Exception as exc:  # one retailer failing must not stop the canvas
+        logger.warning("Canvas: %s failed: %s", retailer.name, exc)
+        return "error", []
+    if getattr(result, "blocked", False):
+        logger.warning("Canvas: %s blocked or unreachable", retailer.name)
+        return "blocked", []
+
+    hits: list[CanvasHit] = []
+    for match in _top_matches(query, result.records, per_store, search_url=url):
+        rec = match["rec"]
+        price = rec.get("price") if isinstance(rec.get("price"), (int, float)) else None
+        native_ccy = rec.get("currency")
+        converted = currency.convert(price, native_ccy or base_ccy, base_ccy, rates)
+        hits.append(
+            CanvasHit(
+                retailer=retailer.name,
+                title=match.get("title") or _clean_title(rec.get("title")) or query,
+                price=price,
+                currency=native_ccy,
+                url=urljoin(url, rec.get("url")) if rec.get("url") else url,
+                converted=converted,
+                score=match["score"],
+            )
+        )
+    return ("ok" if hits else "nomatch"), hits
 
 
 def search(
@@ -366,59 +493,71 @@ def search(
     base: str | None = None,
     country: str | None = None,
     force_js: bool = False,
+    per_store: int | None = None,
 ) -> dict:
     """Search each retailer for ``query`` and return ranked price hits.
 
     ``country`` (ISO-3166 alpha-2) selects local marketplaces. When omitted, it's
     resolved in this order: ``CRAWLR_COUNTRY`` > the explicit ``base`` currency >
     IP geolocation (auto) > the default reporting currency > global stores.
+
+    Up to ``per_store`` listings are kept per retailer (default
+    ``CRAWLR_CANVAS_PER_STORE``), and retailers are searched concurrently.
     """
-    base_ccy = (base or config.FX_BASE).upper()
+    per = per_store if per_store and per_store > 0 else config.CANVAS_PER_STORE
     resolved_country, country_source = _resolve_country(
         country, explicit_ccy=base, use_geo=config.CANVAS_GEO
     )
     catalog = available_retailers(resolved_country)
     rates, fx_source = currency.get_rates()
-    hits: list[CanvasHit] = []
+    # Display currency: an explicit --to wins; otherwise price in the detected
+    # country's own currency (e.g. PH -> PHP); else fall back to CRAWLR_FX_BASE.
+    # Guard against a currency the rate table can't convert.
+    candidate = (base or _country_currency(resolved_country) or config.FX_BASE).upper()
+    base_ccy = candidate if candidate in rates else config.FX_BASE.upper()
+    if base_ccy not in rates:
+        base_ccy = "USD"
+    currency_source = (
+        "flag" if base else ("country" if _country_currency(resolved_country) else "default")
+    )
     selected = _select(retailers, catalog)
 
-    for retailer in selected:
-        url = retailer.search_url.format(q=quote_plus(query))
-        try:
-            result = scrape(url, ecommerce.PRODUCT_LIST_SCHEMA, force_js=force_js)
-        except Exception as exc:  # one retailer failing must not stop the canvas
-            logger.warning("Canvas: %s failed: %s", retailer.name, exc)
-            continue
-        if getattr(result, "blocked", False):
-            logger.warning("Canvas: %s blocked or unreachable", retailer.name)
-            continue
-        match = _best_match(query, result.records)
-        if match is None:
-            continue
-        rec = match["rec"]
-        price = rec.get("price") if isinstance(rec.get("price"), (int, float)) else None
-        native_ccy = rec.get("currency")
-        converted = currency.convert(price, native_ccy or base_ccy, base_ccy, rates)
-        hits.append(
-            CanvasHit(
-                retailer=retailer.name,
-                title=rec.get("title") or query,
-                price=price,
-                currency=native_ccy,
-                url=urljoin(url, rec.get("url")) if rec.get("url") else url,
-                converted=converted,
-                score=match["score"],
-            )
-        )
+    hits: list[CanvasHit] = []
+    blocked: list[str] = []
+    errored: list[str] = []
+
+    def _run(r: Retailer) -> tuple[Retailer, str, list[CanvasHit]]:
+        status, rhits = _search_one(r, query, base_ccy, rates, per, force_js)
+        return r, status, rhits
+
+    workers = min(len(selected), config.CANVAS_WORKERS) if selected else 1
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            outcomes = list(pool.map(_run, selected))
+    else:
+        outcomes = [_run(r) for r in selected]
+
+    for retailer, status, rhits in outcomes:
+        if status == "blocked":
+            blocked.append(retailer.name)
+        elif status == "error":
+            errored.append(retailer.name)
+        hits.extend(rhits)
 
     # Cheapest first; hits without a convertible price sink to the bottom.
     hits.sort(key=lambda h: (h.converted is None, h.converted if h.converted is not None else 0.0))
     return {
         "query": query,
         "base": base_ccy,
+        "currency_source": currency_source,
         "country": resolved_country,
         "country_source": country_source,
         "fx_source": fx_source,
         "retailers_searched": [r.name for r in selected],
+        "blocked": blocked,
+        "errored": errored,
+        "shops": len({h.retailer for h in hits}),
         "hits": hits,
     }

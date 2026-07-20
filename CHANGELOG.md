@@ -6,6 +6,25 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.2]
+
+### Added
+- **Canvas shows many listings, ranked** — up to N matches per store (default 3;
+  `--per-store`/`CRAWLR_CANVAS_PER_STORE`), with retailers searched concurrently
+  (`CRAWLR_CANVAS_WORKERS`). Output shows a listing/shop count.
+- **Region-aware pricing** — when a country is detected, canvas converts every
+  listing into that country's own currency automatically (e.g. PH → PHP), no
+  `--to` needed. Added MYR/IDR/THB/VND/TWD/AED to the pinned FX table.
+- **More retailers** — PH now includes Galleon, Carousell, Amazon &amp; eBay
+  (alongside Lazada/Shopee/Zalora); US adds Target.
+
+### Changed
+- **More accurate canvas matching** — search-page chrome ("Results for …", bare
+  query echoes that don't link to a real product page) is filtered out, quoted
+  title echoes are cleaned, and query matching normalizes forms like
+  "60HE" == "60 he". Blocked/unreachable stores are reported explicitly with a
+  hint to enable a fetch provider.
+
 ## [0.4.1]
 
 ### Added

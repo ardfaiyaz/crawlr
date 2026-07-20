@@ -129,3 +129,68 @@ def test_explicit_currency_overrides_ip(monkeypatch):
     report = canvas.search("x", base="USD")  # …but explicit currency wins
     assert report["country"] == "us"
     assert report["country_source"] == "currency"
+
+
+
+def test_canvas_filters_junk_results(monkeypatch):
+    mapping = {
+        "amazon": [
+            {"title": "Results for mad60 he", "price": 60.0, "currency": "USD", "url": "/s"},
+            {"title": "MAD60 HE Keyboard", "price": 100.0, "currency": "USD", "url": "/p/1"},
+        ]
+    }
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("mad60 he", retailers=["amazon"], base="USD")
+    titles = [h.title for h in report["hits"]]
+    assert "MAD60 HE Keyboard" in titles
+    assert all("Results for" not in t for t in titles)  # page chrome rejected
+
+
+def test_canvas_returns_multiple_listings_per_store(monkeypatch):
+    mapping = {
+        "amazon": [
+            {"title": "MAD60 HE Black", "price": 100.0, "currency": "USD", "url": "/p/1"},
+            {"title": "MAD60 HE White", "price": 110.0, "currency": "USD", "url": "/p/2"},
+            {"title": "MAD60 HE Blue", "price": 120.0, "currency": "USD", "url": "/p/3"},
+        ]
+    }
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("mad60 he", retailers=["amazon"], base="USD", per_store=2)
+    assert len(report["hits"]) == 2  # capped per store
+
+
+def test_canvas_reports_blocked_retailers(monkeypatch):
+    def _scrape(url, schema, force_js=False):
+        res = ExtractionResult(url=url, schema_name="product_list", records=[])
+        res.blocked = True
+        return res
+
+    monkeypatch.setattr(canvas, "scrape", _scrape)
+    report = canvas.search("x", retailers=["amazon", "ebay"], base="USD")
+    assert set(report["blocked"]) == {"Amazon", "eBay"}
+    assert report["hits"] == []
+
+
+def test_canvas_prices_in_local_currency_when_region_detected(monkeypatch):
+    monkeypatch.setattr(canvas.config, "CANVAS_GEO", True)
+    monkeypatch.setattr(canvas.config, "CANVAS_COUNTRY", None)
+    monkeypatch.setattr(canvas, "detect_country_by_ip", lambda: "ph")
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape({}))
+    report = canvas.search("mad60 he")  # no --to, PH detected from IP
+    assert report["country"] == "ph"
+    assert report["base"] == "PHP"          # priced in the region's currency
+    assert report["currency_source"] == "country"
+
+
+
+def test_canvas_rejects_search_page_echo(monkeypatch):
+    # A quoted echo of the query that only links to the search page (a #fragment)
+    # is page chrome, not a product listing.
+    mapping = {
+        "amazon": [
+            {"title": '"logitech mouse"', "price": 179.99, "currency": "USD", "url": "#main-content"}
+        ]
+    }
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("logitech mouse", retailers=["amazon"], base="USD")
+    assert report["hits"] == []
