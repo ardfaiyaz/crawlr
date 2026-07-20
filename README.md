@@ -188,6 +188,27 @@ wrong, and docs/examples.
 A short GIF is the best intro. Generate one with [VHS](https://github.com/charmbracelet/vhs):
 `vhs docs/demo.tape` → `docs/demo.gif` (see [docs/DEMO.md](./docs/DEMO.md)).
 
+## Legal & responsible use
+
+Crawlr is a general-purpose scraping tool, and **you are responsible for how you use it.**
+Before monitoring any site, make sure you comply with:
+
+- the target site's **Terms of Service** and `robots.txt` — Crawlr honors `robots.txt`
+  by default, so keep `CRAWLR_RESPECT_ROBOTS=true` unless you own the site;
+- applicable laws such as the **CFAA** (US) and **GDPR/CCPA** whenever personal data is
+  involved — prefer public, non-personal data and avoid collecting PII;
+- reasonable **rate limits** — use sensible intervals and delays so you don't overload a site.
+
+Crawlr is meant for legitimate uses such as tracking your own listings, price research,
+and public-data monitoring. Please don't use it to bypass authentication, paywalls, or
+anti-abuse protections. The maintainers provide the software "as is" and are not
+responsible for how it is used (see [LICENSE](./LICENSE)).
+
 ## License
 
-MIT
+Crawlr is released under the **MIT License** — free to use, modify, and distribute,
+including commercially. See [LICENSE](./LICENSE).
+
+Building a commercial or hosted product on top of Crawlr? An **open-core** model works
+well: keep the CLI and library MIT-licensed (this repo) and offer any hosted service,
+team features, or premium connectors as a separate paid layer.
