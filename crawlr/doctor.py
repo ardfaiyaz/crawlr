@@ -59,13 +59,16 @@ def run_checks() -> list[Check]:
         )
 
     has_playwright = importlib.util.find_spec("playwright") is not None
-    checks.append(
-        Check(
-            "JS rendering",
-            "ok" if has_playwright else "warn",
-            "playwright installed" if has_playwright else "not installed (pip install 'crawlr[js]')",
-        )
-    )
+    if not config.AUTO_JS:
+        js_detail = "auto JS rendering disabled (CRAWLR_AUTO_JS=false)"
+        js_status = "warn"
+    elif has_playwright:
+        js_detail = "built-in browser ready (auto-renders blocked/JS pages)"
+        js_status = "ok"
+    else:
+        js_detail = "browser engine missing — reinstall with: pip install --force-reinstall crawlr"
+        js_status = "warn"
+    checks.append(Check("JS rendering", js_status, js_detail))
 
     provider = config.FETCH_PROVIDER
     if provider and provider != "direct":

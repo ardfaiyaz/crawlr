@@ -56,3 +56,67 @@ def test_stale_page_detected(monkeypatch):
     result, _ = monitor.run_once(site_id, ecommerce.PRODUCT_SCHEMA)  # identical content
     assert any("unchanged" in w.lower() for w in result.warnings)
     assert result.content_hash is not None
+
+
+
+def _patch_fetch_internals(monkeypatch):
+    monkeypatch.setattr(fetcher, "_robots_allows", lambda url: True)
+    monkeypatch.setattr(fetcher, "_respect_rate_limit", lambda url: None)
+    monkeypatch.setattr(fetcher.providers, "enabled", lambda: False)
+
+
+def test_auto_js_escalates_on_block(monkeypatch):
+    # A blocked static fetch is automatically re-rendered with a browser — no --js.
+    _patch_fetch_internals(monkeypatch)
+    blocked = FetchResult(
+        url="https://shop.test/p", html="<html>Access Denied</html>",
+        status_code=403, blocked=True, blocked_reason="http 403",
+    )
+    rendered = FetchResult(
+        url="https://shop.test/p",
+        html="<html><body>" + ("real product " * 40) + "</body></html>",
+        status_code=200, rendered_with_js=True,
+    )
+    monkeypatch.setattr(fetcher, "_fetch_static", lambda url: blocked)
+    monkeypatch.setattr(fetcher, "_fetch_js", lambda url: rendered)
+    result = fetcher.fetch("https://shop.test/p")
+    assert result.rendered_with_js is True
+    assert result.blocked is False
+
+
+def test_auto_js_can_be_disabled(monkeypatch):
+    _patch_fetch_internals(monkeypatch)
+    monkeypatch.setattr(fetcher, "AUTO_JS", False)
+    blocked = FetchResult(
+        url="https://shop.test/p", html="x", status_code=403,
+        blocked=True, blocked_reason="http 403",
+    )
+    monkeypatch.setattr(fetcher, "_fetch_static", lambda url: blocked)
+
+    def _should_not_render(url):
+        raise AssertionError("JS render must not run when CRAWLR_AUTO_JS is off")
+
+    monkeypatch.setattr(fetcher, "_fetch_js", _should_not_render)
+    assert fetcher.fetch("https://shop.test/p").blocked is True
+
+
+def test_auto_js_missing_browser_is_graceful(monkeypatch):
+    _patch_fetch_internals(monkeypatch)
+    blocked = FetchResult(
+        url="https://shop.test/p", html="x", status_code=403,
+        blocked=True, blocked_reason="http 403",
+    )
+    monkeypatch.setattr(fetcher, "_fetch_static", lambda url: blocked)
+
+    def _unavailable(url):
+        raise RuntimeError("browser unavailable")
+
+    monkeypatch.setattr(fetcher, "_fetch_js", _unavailable)
+    # Falls back to the blocked static result instead of crashing.
+    assert fetcher.fetch("https://shop.test/p").blocked is True
+
+
+def test_is_missing_browser_detection():
+    assert fetcher._is_missing_browser(Exception("Executable doesn't exist at /x")) is True
+    assert fetcher._is_missing_browser(Exception("please run: playwright install")) is True
+    assert fetcher._is_missing_browser(Exception("net::ERR_TIMED_OUT")) is False

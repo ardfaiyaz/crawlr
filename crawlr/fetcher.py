@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import atexit
 import itertools
+import logging
 import random
+import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from urllib.parse import urlparse
@@ -24,7 +27,9 @@ from selectolax.parser import HTMLParser
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from . import providers
-from .config import ANTIBOT, FETCH
+from .config import ANTIBOT, AUTO_JS, AUTO_PLAYWRIGHT_INSTALL, FETCH
+
+logger = logging.getLogger("crawlr.fetcher")
 
 
 @dataclass
@@ -193,14 +198,60 @@ def _fetch_static(url: str) -> FetchResult:
         return _handle(client.get(url))
 
 
-def _fetch_js(url: str) -> FetchResult:
-    """Render with Playwright. Requires the optional `js` extra."""
+_chromium_ready = False
+
+
+def _is_missing_browser(exc: Exception) -> bool:
+    """True if a Playwright error is about the browser binary not being installed."""
+    msg = str(exc).lower()
+    return (
+        "executable doesn't exist" in msg
+        or "playwright install" in msg
+        or "looks like playwright" in msg
+        or "browsertype.launch" in msg
+        and "install" in msg
+    )
+
+
+def _install_chromium() -> bool:
+    """Download the Chromium browser binary Playwright needs (one-time).
+
+    This removes the manual `playwright install chromium` step so JS rendering
+    "just works" after `pip install 'crawlr[js]'`.
+    """
+    global _chromium_ready
+    if _chromium_ready:
+        return True
+    logger.warning(
+        "Setting up the headless browser for JS rendering "
+        "(one-time download, ~150MB)…"
+    )
     try:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=True,
+            capture_output=True,
+        )
+        _chromium_ready = True
+        return True
+    except (subprocess.CalledProcessError, OSError) as exc:  # pragma: no cover
+        logger.warning("Automatic browser setup failed: %s", exc)
+        return False
+
+
+def _fetch_js(url: str) -> FetchResult:
+    """Render with Playwright. Requires the optional `js` extra.
+
+    The Chromium browser binary is auto-installed on first use (unless
+    CRAWLR_AUTO_PLAYWRIGHT_INSTALL=false), so no manual setup step is needed.
+    """
+    try:
+        from playwright.sync_api import Error as PlaywrightError
         from playwright.sync_api import sync_playwright
-    except ImportError as exc:  # pragma: no cover - depends on optional extra
+    except ImportError as exc:  # pragma: no cover - Playwright ships by default
         raise RuntimeError(
-            "JS rendering requested but Playwright is not installed. "
-            "Install with: pip install 'crawlr[js]' && playwright install chromium"
+            "The bundled browser engine (Playwright) is unavailable. Reinstall with: "
+            "pip install --force-reinstall crawlr"
         ) from exc
 
     proxy = _next_proxy()
@@ -208,15 +259,34 @@ def _fetch_js(url: str) -> FetchResult:
     if proxy:
         launch_kwargs["proxy"] = {"server": proxy}
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(**launch_kwargs)
-        try:
-            page = browser.new_page(user_agent=_pick_user_agent())
-            page.goto(url, timeout=int(FETCH.timeout_seconds * 1000), wait_until="networkidle")
-            html = page.content()
-            return FetchResult(url=page.url, html=html, status_code=200, rendered_with_js=True)
-        finally:
-            browser.close()
+    def _render() -> FetchResult:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(**launch_kwargs)
+            try:
+                page = browser.new_page(user_agent=_pick_user_agent())
+                page.goto(
+                    url, timeout=int(FETCH.timeout_seconds * 1000), wait_until="networkidle"
+                )
+                html = page.content()
+                return FetchResult(
+                    url=page.url, html=html, status_code=200, rendered_with_js=True
+                )
+            finally:
+                browser.close()
+
+    try:
+        return _render()
+    except PlaywrightError as exc:  # pragma: no cover - needs a real browser
+        # Most common first-run failure: the browser binary isn't installed yet.
+        if _is_missing_browser(exc) and AUTO_PLAYWRIGHT_INSTALL and _install_chromium():
+            try:
+                return _render()
+            except PlaywrightError as exc2:
+                raise RuntimeError(f"JS rendering failed after browser setup: {exc2}") from exc2
+        raise RuntimeError(
+            f"JS rendering failed: {exc}. Install the browser with: "
+            "playwright install chromium"
+        ) from exc
 
 
 def _fetch_via_provider(url: str) -> FetchResult:
@@ -267,23 +337,25 @@ def fetch(url: str, force_js: bool = False) -> FetchResult:
             blocked_reason=f"connection error ({type(exc).__name__})",
         )
 
-    # Block detection: a real browser sometimes clears anti-bot challenges.
+    # Block detection: auto-escalate to a real browser, which often clears the
+    # anti-bot challenge — no --js flag needed (disable with CRAWLR_AUTO_JS=false).
     reason = result.blocked_reason or detect_block(result.status_code, result.html)
     if reason:
         result.blocked = True
         result.blocked_reason = reason
-        try:
-            rendered = _fetch_js(url)
-            if not detect_block(rendered.status_code, rendered.html):
-                return rendered
-        except RuntimeError:
-            pass
+        if AUTO_JS:
+            try:
+                rendered = _fetch_js(url)
+                if not detect_block(rendered.status_code, rendered.html):
+                    return rendered
+            except RuntimeError as exc:
+                logger.info("Auto JS render unavailable for %s: %s", url, exc)
         return result
 
-    if _looks_like_js_shell(result.html):
+    if AUTO_JS and _looks_like_js_shell(result.html):
         try:
             return _fetch_js(url)
-        except RuntimeError:
-            # Playwright not available; return static result with a note upstream.
+        except RuntimeError as exc:
+            logger.info("Auto JS render unavailable for %s: %s", url, exc)
             return result
     return result

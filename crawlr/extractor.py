@@ -44,7 +44,7 @@ def scrape(url: str, schema: ExtractionSchema, force_js: bool = False) -> Extrac
         archive.save(fetched.url, schema.name, fetched.html)
 
     if fetched.rendered_with_js is False and _static_looked_empty(fetched.html):
-        result.warnings.append("Page may require JS rendering (install the 'js' extra).")
+        result.warnings.append("Page looked JS-heavy; static HTML may be incomplete.")
 
     cached = selector_cache.get(url, schema.name)
 

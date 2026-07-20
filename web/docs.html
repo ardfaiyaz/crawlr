@@ -20,7 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
-        <span class="ver">v0.4.2</span>
+        <span class="ver">v0.5.0</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -81,9 +81,12 @@
       <h2 id="install">1. Install</h2>
       <p>You need Python 3.10 or newer. Install with <code>pipx</code> (recommended) or <code>pip</code>:</p>
       <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">pipx install crawlr</span>        <span class="c"># or: pip install crawlr</span></pre></div>
-      <p>Optional add-ons, only if you need them:</p>
-      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">pip install "crawlr[js]"</span> && playwright install chromium   <span class="c"># JavaScript-heavy sites</span>
-<span class="p">pip install "crawlr[postgres]"</span>                            <span class="c"># use Postgres instead of SQLite</span></pre></div>
+      <p><strong>JavaScript rendering is built in.</strong> A headless browser ships with Crawlr, and
+      it automatically re-renders any page that's bot-blocked or JS-only — no flags, no extra install
+      (the browser binary downloads itself the first time it's needed). Turn it off with
+      <code>CRAWLR_AUTO_JS=false</code>.</p>
+      <p>Optional add-on, only if you need it:</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">pip install "crawlr[postgres]"</span>                            <span class="c"># use Postgres instead of SQLite</span></pre></div>
       <p>Check everything works:</p>
       <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr doctor</span></pre></div>
 
@@ -422,6 +425,8 @@
           <tr><td><code>CRAWLR_ALERT_THROTTLE_MINUTES</code></td><td><code>0</code></td><td>Suppress repeat alerts within N minutes</td></tr>
           <tr><td><code>CRAWLR_PROXIES</code></td><td>—</td><td>Comma-separated proxy URLs to rotate</td></tr>
           <tr><td><code>CRAWLR_RESPECT_ROBOTS</code></td><td><code>true</code></td><td>Honor robots.txt</td></tr>
+          <tr><td><code>CRAWLR_AUTO_JS</code></td><td><code>true</code></td><td>Auto-render blocked / JS-only pages with the built-in headless browser</td></tr>
+          <tr><td><code>CRAWLR_AUTO_PLAYWRIGHT_INSTALL</code></td><td><code>true</code></td><td>Auto-download the Chromium browser binary on first JS render</td></tr>
           <tr><td><code>CRAWLR_FX_BASE</code></td><td><code>USD</code></td><td>Currency that compare/canvas convert prices into</td></tr>
           <tr><td><code>CRAWLR_FX_LIVE</code></td><td><code>false</code></td><td>Fetch live FX rates (cached) instead of the pinned table</td></tr>
           <tr><td><code>CRAWLR_FX_API_URL</code></td><td>open.er-api.com</td><td>Live FX endpoint (<code>{"rates": {CODE: perUSD}}</code>)</td></tr>

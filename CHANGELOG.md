@@ -6,6 +6,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0]
+
+### Changed
+- **JavaScript rendering is now built in and automatic.** Playwright ships as a
+  core dependency, so `pip install crawlr` includes the headless browser engine —
+  no `crawlr[js]` extra needed. Any page that's bot-blocked or looks like a
+  JS-only shell is transparently re-rendered with a real browser (no `--js` flag).
+  Toggle with `CRAWLR_AUTO_JS` (default on).
+- The Chromium browser binary is **auto-downloaded on first use** (removing the
+  manual `playwright install chromium` step); disable with
+  `CRAWLR_AUTO_PLAYWRIGHT_INSTALL=false`. The old `crawlr[js]` extra is kept as a
+  no-op alias for backwards compatibility.
+
 ## [0.4.2]
 
 ### Added

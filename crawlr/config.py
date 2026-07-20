@@ -108,6 +108,22 @@ FETCH_PROVIDER_RESPONSE = os.getenv("CRAWLR_FETCH_PROVIDER_RESPONSE", "html").st
 FETCH_PROVIDER_HTML_PATH = os.getenv("CRAWLR_FETCH_PROVIDER_HTML_PATH", "")
 
 # ---------------------------------------------------------------------------
+# JavaScript rendering (headless browser via the optional `js` extra)
+# ---------------------------------------------------------------------------
+
+# Automatically render with a headless browser when a page is blocked by
+# anti-bot or looks like an empty JS shell — no --js flag needed. Requires the
+# `js` extra (pip install 'crawlr[js]'). Set false to stay static-only.
+AUTO_JS = os.getenv("CRAWLR_AUTO_JS", "true").lower() == "true"
+
+# On the first JS render, auto-download the Chromium browser binary if it's
+# missing (removes the manual `playwright install chromium` step). Set false to
+# manage the browser install yourself.
+AUTO_PLAYWRIGHT_INSTALL = (
+    os.getenv("CRAWLR_AUTO_PLAYWRIGHT_INSTALL", "true").lower() == "true"
+)
+
+# ---------------------------------------------------------------------------
 # Canvas: cross-retailer product search / comparison
 # ---------------------------------------------------------------------------
 

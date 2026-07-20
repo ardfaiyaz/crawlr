@@ -432,9 +432,11 @@ def canvas(
 
     blocked = report.get("blocked", [])
     if blocked and cfg.FETCH_PROVIDER == "direct":
+        blocked_names = ", ".join(blocked)
         console.print(
-            f"[dim]{len(blocked)} store(s) blocked bots ({', '.join(blocked)}). "
-            "Set CRAWLR_FETCH_PROVIDER (e.g. scraperapi) to include them.[/dim]"
+            f"[dim]{len(blocked)} store(s) still blocked after automatic JS rendering "
+            f"({blocked_names}). For the most reliable results on heavily-protected "
+            "marketplaces, set CRAWLR_FETCH_PROVIDER (e.g. scraperapi).[/dim]"
         )
     if not hits:
         console.print(f"[yellow]No matches found for '{query}'.[/yellow]")

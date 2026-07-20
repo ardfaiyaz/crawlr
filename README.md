@@ -224,6 +224,8 @@ Full reference:
 | `CRAWLR_ALERT_THROTTLE_MINUTES` | `0` | Suppress repeat alerts within N minutes |
 | `CRAWLR_PROXIES` | — | Comma-separated proxy URLs to rotate |
 | `CRAWLR_RESPECT_ROBOTS` | `true` | Honor robots.txt |
+| `CRAWLR_AUTO_JS` | `true` | Auto-render blocked / JS-only pages with the built-in headless browser |
+| `CRAWLR_AUTO_PLAYWRIGHT_INSTALL` | `true` | Auto-download the Chromium browser binary on first JS render |
 | `CRAWLR_FX_BASE` | `USD` | Currency that `compare` converts prices into |
 | `CRAWLR_FX_LIVE` | `false` | Fetch live FX rates (cached) instead of the pinned table |
 | `CRAWLR_FX_API_URL` | `open.er-api.com` | Live FX endpoint (`{"rates": {CODE: perUSD}}`) |
@@ -430,13 +432,11 @@ marketplaces are deliberately hostile to bots, in three ways — here's how to g
 best shot:
 
 1. **They render prices with JavaScript.** The price often isn't in the raw HTML; it loads
-   after the page runs its scripts. Install the browser engine so Crawlr can render it:
-   ```bash
-   pip install "crawlr[js]"
-   playwright install chromium
-   ```
-   Then pass `--js` (e.g. `crawlr watch "<url>" --js`) or let Crawlr auto-escalate when it
-   detects a JS-only shell.
+   after the page runs its scripts. **Crawlr handles this automatically** — a headless browser
+   ships with it, and Crawlr transparently re-renders any page that's blocked or looks like a
+   JS-only shell (no `--js` flag, no separate install). The browser binary downloads itself the
+   first time it's needed. To force rendering you can still pass `--js`; to turn the automatic
+   behavior off, set `CRAWLR_AUTO_JS=false`.
 
 2. **They have anti-bot protection** (Cloudflare, CAPTCHAs, rate limits). Crawlr detects when
    it's blocked and **skips that run** instead of saving a bogus price. The most reliable way
@@ -459,7 +459,7 @@ best shot:
 |-----------|-------------------|
 | Independent shops, Shopify / WooCommerce, anything with schema.org data | ✅ Works well out of the box |
 | A marketplace's **official API** (if it offers one) | ✅ Most reliable — prefer this |
-| Lazada / Shopee / Amazon product pages | ⚠️ Possible with `crawlr[js]` + proxies; may still get blocked |
+| Lazada / Shopee / Amazon product pages | ⚠️ Auto JS rendering helps; a fetch provider + proxies is most reliable, but may still get blocked |
 | Pages behind a login, or a CAPTCHA on every request | ❌ Not a good fit |
 
 **Tip:** prove the whole flow works on an easy site first, then point it at the hard one:
