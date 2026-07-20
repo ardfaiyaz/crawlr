@@ -80,6 +80,43 @@ FX_CACHE_PATH = DATA_DIR / "fx_rates.json"
 # Applied on top of the built-in pinned table; handy for reproducible reports.
 FX_RATES_OVERRIDE = os.getenv("CRAWLR_FX_RATES", "")
 
+# ---------------------------------------------------------------------------
+# Remote fetch provider (unblocking / JS-render API)
+# ---------------------------------------------------------------------------
+
+# Big marketplaces block direct requests. Instead of fighting anti-bot ourselves,
+# route fetches through a third-party rendering/unblocking API that returns clean
+# HTML. "direct" (default) fetches ourselves. Built-in presets: scraperapi,
+# scrapingbee, zyte. Use "custom" to wire up any URL-in / HTML-out service.
+FETCH_PROVIDER = os.getenv("CRAWLR_FETCH_PROVIDER", "direct").strip().lower()
+FETCH_PROVIDER_KEY = os.getenv("CRAWLR_FETCH_PROVIDER_KEY", "") or None
+# Whether to ask the provider to render JavaScript (costs more credits).
+FETCH_PROVIDER_RENDER = os.getenv("CRAWLR_FETCH_PROVIDER_RENDER", "true").lower() == "true"
+
+# --- "custom" provider knobs (only needed when CRAWLR_FETCH_PROVIDER=custom) ---
+FETCH_PROVIDER_ENDPOINT = os.getenv("CRAWLR_FETCH_PROVIDER_ENDPOINT", "") or None
+FETCH_PROVIDER_METHOD = os.getenv("CRAWLR_FETCH_PROVIDER_METHOD", "GET").strip().upper()
+# Query-param names for the target URL and API key (GET-style providers).
+FETCH_PROVIDER_URL_PARAM = os.getenv("CRAWLR_FETCH_PROVIDER_URL_PARAM", "url")
+FETCH_PROVIDER_KEY_PARAM = os.getenv("CRAWLR_FETCH_PROVIDER_KEY_PARAM", "") or None
+# Or send the key in a header instead (e.g. "Authorization" / "X-API-Key").
+FETCH_PROVIDER_KEY_HEADER = os.getenv("CRAWLR_FETCH_PROVIDER_KEY_HEADER", "") or None
+# Extra static query params, e.g. "render=true&country_code=us".
+FETCH_PROVIDER_EXTRA = os.getenv("CRAWLR_FETCH_PROVIDER_EXTRA", "")
+# Response shape: "html" (body is raw HTML) or "json" (+ a dotted path to it).
+FETCH_PROVIDER_RESPONSE = os.getenv("CRAWLR_FETCH_PROVIDER_RESPONSE", "html").strip().lower()
+FETCH_PROVIDER_HTML_PATH = os.getenv("CRAWLR_FETCH_PROVIDER_HTML_PATH", "")
+
+# ---------------------------------------------------------------------------
+# Canvas: cross-retailer product search / comparison
+# ---------------------------------------------------------------------------
+
+# Optional YAML file adding your own retailers for `crawlr canvas`. Format:
+#   retailers:
+#     - name: My Shop
+#       search_url: "https://myshop.com/search?q={q}"
+CANVAS_RETAILERS_FILE = os.getenv("CRAWLR_CANVAS_RETAILERS", "") or None
+
 # Hosted API: when set, the JSON API requires this key (X-API-Key or Bearer).
 # Left unset, the API is open (fine for local use).
 API_KEY = os.getenv("CRAWLR_API_KEY", "") or None

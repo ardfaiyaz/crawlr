@@ -337,6 +337,59 @@ def fx(
 
 
 @app.command()
+def canvas(
+    query: str = typer.Argument(..., help='Product to search for, e.g. "Wooting 60HE"'),
+    retailers: str = typer.Option(
+        None, help="Comma list to limit search (e.g. amazon,ebay); omit = all known"
+    ),
+    to: str = typer.Option(
+        None, "--to", help="Compare prices in this currency (default: CRAWLR_FX_BASE)"
+    ),
+    js: bool = typer.Option(False, help="Force JS rendering (needs the 'js' extra)"),
+) -> None:
+    """Find a product across many retailers and compare prices ("canvas").
+
+    You give a product name (not a link); Crawlr searches each retailer, grabs the
+    best-matching result + price, converts everything to one currency, and ranks
+    them. Marketplaces that block bots need a fetch provider — see
+    CRAWLR_FETCH_PROVIDER.
+    """
+    from . import canvas as canvas_mod
+    from . import config as cfg
+
+    _mode_banner()
+    names = [r for r in retailers.split(",") if r.strip()] if retailers else None
+    report = canvas_mod.search(query, names, base=to, force_js=js)
+    hits = report["hits"]
+    base = report["base"]
+
+    if cfg.FETCH_PROVIDER == "direct":
+        console.print(
+            "[dim]Tip: set CRAWLR_FETCH_PROVIDER (e.g. scraperapi) to reach marketplaces "
+            "that block bots.[/dim]"
+        )
+    if not hits:
+        console.print(f"[yellow]No matches found for '{query}'.[/yellow]")
+        return
+
+    table = Table(
+        "Retailer", "Product", "Price", f"In {base}", "Match",
+        title=f"Canvas: {query} (FX: {report['fx_source']})",
+    )
+    for h in hits:
+        native = _price(h.price) + (f" {h.currency}" if h.currency else "")
+        table.add_row(h.retailer, _fmt(h.title), native, _price(h.converted), f"{h.score:.0%}")
+    console.print(table)
+
+    best = next((h for h in hits if h.converted is not None), None)
+    if best:
+        console.print(
+            f"[green]Cheapest:[/green] {best.retailer} — {best.title} "
+            f"at {best.converted:g} {base}\n[dim]{best.url}[/dim]"
+        )
+
+
+@app.command()
 def init(force: bool = typer.Option(False, help="Overwrite an existing rules file")) -> None:
     """Create a starter rules template (crawlr.rules.yaml)."""
     written, message = triggers.write_template(overwrite=force)

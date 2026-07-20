@@ -23,6 +23,7 @@ import httpx
 from selectolax.parser import HTMLParser
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from . import providers
 from .config import ANTIBOT, FETCH
 
 
@@ -218,6 +219,23 @@ def _fetch_js(url: str) -> FetchResult:
             browser.close()
 
 
+def _fetch_via_provider(url: str) -> FetchResult:
+    """Fetch through the configured remote provider; block-detect the result."""
+    try:
+        html, status = providers.fetch_html(url)
+    except httpx.HTTPError as exc:
+        return FetchResult(
+            url=url, html="", status_code=0, blocked=True,
+            blocked_reason=f"fetch-provider error ({type(exc).__name__})",
+        )
+    result = FetchResult(url=url, html=html, status_code=status, rendered_with_js=True)
+    reason = detect_block(status, html)
+    if reason:
+        result.blocked = True
+        result.blocked_reason = reason
+    return result
+
+
 def fetch(url: str, force_js: bool = False) -> FetchResult:
     """Fetch a URL: honor robots.txt, detect blocks, escalate to JS when needed."""
     if not _robots_allows(url):
@@ -226,6 +244,11 @@ def fetch(url: str, force_js: bool = False) -> FetchResult:
         )
 
     _respect_rate_limit(url)
+
+    # Route through a remote unblocking/render provider when configured. This is
+    # how Crawlr gets past anti-bot on big marketplaces without a local browser.
+    if providers.enabled():
+        return _fetch_via_provider(url)
 
     if force_js:
         return _fetch_js(url)

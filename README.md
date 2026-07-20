@@ -125,6 +125,7 @@ rules:
 | `crawlr monitor` | Check all due pages **once**, right now |
 | `crawlr monitor --daemon` | Keep checking forever in the background |
 | `crawlr compare <url> <url> …` | One-off price comparison across several links |
+| `crawlr canvas "<product>"` | Search many stores by product name and compare prices |
 | `crawlr insights <id>` | Price analytics: all-time low/high, average, "deal score" |
 | `crawlr pause <id>` / `resume <id>` | Temporarily stop / restart tracking one item |
 | `crawlr unwatch <id>` | Stop tracking an item and delete its history |
@@ -203,6 +204,10 @@ Set via environment variables or a `.env` file:
 | `CRAWLR_FX_LIVE` | `false` | Fetch live FX rates (cached) instead of the pinned table |
 | `CRAWLR_FX_API_URL` | `open.er-api.com` | Live FX endpoint (`{"rates": {CODE: perUSD}}`) |
 | `CRAWLR_FX_RATES` | — | Pinned rate overrides, e.g. `EUR=0.92,GBP=0.79` |
+| `CRAWLR_FETCH_PROVIDER` | `direct` | Unblocking/render backend: `scraperapi`, `scrapingbee`, `zyte`, `custom`, or `direct` |
+| `CRAWLR_FETCH_PROVIDER_KEY` | — | API key for the chosen provider |
+| `CRAWLR_FETCH_PROVIDER_RENDER` | `true` | Ask the provider to render JavaScript (costs more credits) |
+| `CRAWLR_CANVAS_RETAILERS` | — | Path to a YAML file adding your own stores to `crawlr canvas` |
 
 ## Examples
 
@@ -247,8 +252,9 @@ best shot:
    detects a JS-only shell.
 
 2. **They have anti-bot protection** (Cloudflare, CAPTCHAs, rate limits). Crawlr detects when
-   it's blocked and **skips that run** instead of saving a bogus price — but getting through
-   reliably usually needs rotating proxies:
+   it's blocked and **skips that run** instead of saving a bogus price. The most reliable way
+   through is a **fetch provider** — a service that renders the page and clears anti-bot for
+   you, returning clean HTML (see *Use a fetch provider* below). Rotating proxies also help:
    ```bash
    export CRAWLR_PROXIES="http://user:pass@host:port,http://host2:port"
    ```
@@ -275,6 +281,38 @@ best shot:
 crawlr watch "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html" --target 60
 crawlr watchlist
 ```
+
+### Use a fetch provider (recommended for marketplaces)
+
+Rather than fighting anti-bot yourself, route fetches through a rendering/unblocking service
+(ScraperAPI, ScrapingBee, Zyte, or any similar "URL in → HTML out" API). Crawlr then extracts
+as usual — no code changes needed:
+
+```bash
+export CRAWLR_FETCH_PROVIDER=scraperapi     # or scrapingbee | zyte | custom
+export CRAWLR_FETCH_PROVIDER_KEY=your-key
+crawlr doctor                               # confirms the provider is configured
+```
+
+Most providers have a free tier to start. For any service that isn't built in, use
+`CRAWLR_FETCH_PROVIDER=custom` and point it at the endpoint yourself
+(`CRAWLR_FETCH_PROVIDER_ENDPOINT`, `_URL_PARAM`, `_KEY_PARAM`/`_KEY_HEADER`, `_EXTRA`,
+`_RESPONSE`/`_HTML_PATH`). Even more reliable and fully legal: a marketplace's **official API**.
+
+## Canvas — shop a product across many stores
+
+Don't have a link, just a product in mind (say a *Wooting 60HE*)? `crawlr canvas` searches
+several retailers at once, grabs the best-matching result + price from each, converts everything
+into one currency, and ranks them so you can comparison-shop ("canvas") in one command:
+
+```bash
+crawlr canvas "Wooting 60HE"                                        # all known retailers
+crawlr canvas "Wooting 60HE" --retailers amazon,ebay,newegg --to USD
+```
+
+Built-in retailers include Amazon, eBay, Walmart, Newegg, Lazada, and AliExpress; add your own
+via a YAML file (`CRAWLR_CANVAS_RETAILERS`). Marketplaces that block bots need a fetch provider
+(above) to return results reliably.
 
 ## Legal & responsible use
 

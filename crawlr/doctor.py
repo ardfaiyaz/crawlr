@@ -67,6 +67,21 @@ def run_checks() -> list[Check]:
         )
     )
 
+    provider = config.FETCH_PROVIDER
+    if provider and provider != "direct":
+        has_key = bool(config.FETCH_PROVIDER_KEY)
+        checks.append(
+            Check(
+                "Fetch provider",
+                "ok" if has_key else "warn",
+                provider if has_key else f"{provider} (CRAWLR_FETCH_PROVIDER_KEY not set)",
+            )
+        )
+    else:
+        checks.append(
+            Check("Fetch provider", "ok", "direct (set CRAWLR_FETCH_PROVIDER for marketplaces)")
+        )
+
     sinks = alerts.configured_sinks()
     non_console = [s for s in sinks if s != "console"]
     checks.append(
