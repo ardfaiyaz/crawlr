@@ -33,6 +33,28 @@ app = typer.Typer(help="Crawlr: AI-powered, self-healing web scraper for price i
 console = Console()
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        from . import __version__
+
+        console.print(f"crawlr {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        help="Show the installed Crawlr version and exit.",
+        callback=_version_callback,
+        is_eager=True,
+    ),
+) -> None:
+    """Crawlr: AI-powered, self-healing web scraper for price intelligence."""
+
+
 def _schema(name: str):
     schema = schema_registry.resolve(name)
     if schema is None:
