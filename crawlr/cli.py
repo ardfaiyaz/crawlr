@@ -367,13 +367,23 @@ def canvas(
     to: str = typer.Option(
         None, "--to", help="Compare prices in this currency (default: CRAWLR_FX_BASE)"
     ),
+    country: str = typer.Option(
+        None,
+        "--country",
+        "--region",
+        help="Country for local stores, e.g. ph, sg, us (default: from currency/CRAWLR_COUNTRY)",
+    ),
     js: bool = typer.Option(False, help="Force JS rendering (needs the 'js' extra)"),
 ) -> None:
     """Find a product across many retailers and compare prices ("canvas").
 
     You give a product name (not a link); Crawlr searches each retailer, grabs the
     best-matching result + price, converts everything to one currency, and ranks
-    them. Marketplaces that block bots need a fetch provider — see
+    them.
+
+    Use --country to search local marketplaces (e.g. --country ph adds Lazada PH,
+    Shopee PH, Zalora PH). If omitted, the country is inferred from your currency
+    (e.g. --to PHP). Marketplaces that block bots need a fetch provider — see
     CRAWLR_FETCH_PROVIDER.
     """
     from . import canvas as canvas_mod
@@ -381,22 +391,34 @@ def canvas(
 
     _mode_banner()
     names = [r for r in retailers.split(",") if r.strip()] if retailers else None
-    report = canvas_mod.search(query, names, base=to, force_js=js)
+    report = canvas_mod.search(query, names, base=to, country=country, force_js=js)
     hits = report["hits"]
     base = report["base"]
+    resolved_country = report.get("country")
 
+    if resolved_country:
+        searched = ", ".join(report.get("retailers_searched", [])) or "—"
+        console.print(
+            f"[dim]Region: {resolved_country.upper()} · searching: {searched}[/dim]"
+        )
+    else:
+        console.print(
+            "[dim]No region set — searching global stores. Add --country ph "
+            "(or --to PHP) to include local marketplaces like Lazada & Shopee.[/dim]"
+        )
     if cfg.FETCH_PROVIDER == "direct":
         console.print(
             "[dim]Tip: set CRAWLR_FETCH_PROVIDER (e.g. scraperapi) to reach marketplaces "
-            "that block bots.[/dim]"
+            "that block bots (Lazada, Shopee, Amazon).[/dim]"
         )
     if not hits:
         console.print(f"[yellow]No matches found for '{query}'.[/yellow]")
         return
 
+    region_label = f" [{resolved_country.upper()}]" if resolved_country else ""
     table = Table(
         "Retailer", "Product", "Price", f"In {base}", "Match",
-        title=f"Canvas: {query} (FX: {report['fx_source']})",
+        title=f"Canvas: {query}{region_label} (FX: {report['fx_source']})",
     )
     for h in hits:
         native = _price(h.price) + (f" {h.currency}" if h.currency else "")

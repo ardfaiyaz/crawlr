@@ -20,6 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
+        <span class="ver">v0.4.0</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -132,6 +133,7 @@
           <tr><td><code>crawlr serve</code></td><td>Open the web dashboard at <code>http://localhost:8000</code></td></tr>
           <tr><td><code>crawlr doctor</code></td><td>Check that your setup works</td></tr>
           <tr><td><code>crawlr test-alert</code></td><td>Send a test notification so you know alerts reach you</td></tr>
+          <tr><td><code>crawlr --version</code></td><td>Print the installed Crawlr version (also <code>-V</code>)</td></tr>
         </tbody>
       </table>
 
@@ -193,11 +195,37 @@
       <code>crawlr canvas</code> searches several retailers at once, grabs the best-matching result
       and price from each, converts everything to one currency, and ranks them so you can
       comparison-shop in one command.</p>
-      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr canvas "Wooting 60HE"</span>                                        <span class="c"># all known retailers</span>
-<span class="p">crawlr canvas "Wooting 60HE" --retailers amazon,ebay,newegg --to USD</span></pre></div>
-      <p>Built-in retailers include Amazon, eBay, Walmart, Newegg, Lazada, and AliExpress. Add your
-      own with a YAML file (<code>CRAWLR_CANVAS_RETAILERS</code>). Big marketplaces block bots, so
-      for reliable results set up a <a href="#config-provider">fetch provider</a> first.</p>
+      <div class="terminal"><div class="terminal-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="tterm">bash</span></div><pre><span class="p">crawlr canvas "Wooting 60HE"</span>                          <span class="c"># global stores</span>
+<span class="p">crawlr canvas "MAD60 HE" --country ph</span>                 <span class="c"># Lazada PH, Shopee PH, Zalora PH…</span>
+<span class="p">crawlr canvas "Wooting 60HE" --to PHP</span>                 <span class="c"># infers --country ph from the currency</span>
+<span class="p">crawlr canvas "Wooting 60HE" --retailers amazon,ebay --to USD</span></pre></div>
+      <p><strong>Canvas is location-aware.</strong> Pass <code>--country</code> (an ISO code like
+      <code>ph</code>, <code>sg</code>, <code>us</code>) — or set <code>CRAWLR_COUNTRY</code>, or just
+      use a local currency with <code>--to</code> — and Crawlr searches that country's stores instead
+      of the global set:</p>
+      <table>
+        <thead><tr><th>Country</th><th><code>--country</code></th><th>Local stores it searches</th></tr></thead>
+        <tbody>
+          <tr><td>Philippines</td><td><code>ph</code></td><td>Lazada PH, Shopee PH, Zalora PH, AliExpress</td></tr>
+          <tr><td>Singapore</td><td><code>sg</code></td><td>Lazada SG, Shopee SG, Amazon SG, AliExpress</td></tr>
+          <tr><td>Malaysia</td><td><code>my</code></td><td>Lazada MY, Shopee MY, AliExpress</td></tr>
+          <tr><td>Indonesia</td><td><code>id</code></td><td>Lazada ID, Shopee ID, Tokopedia, AliExpress</td></tr>
+          <tr><td>Thailand</td><td><code>th</code></td><td>Lazada TH, Shopee TH, AliExpress</td></tr>
+          <tr><td>Vietnam</td><td><code>vn</code></td><td>Lazada VN, Shopee VN, Tiki, AliExpress</td></tr>
+          <tr><td>United States</td><td><code>us</code></td><td>Amazon, eBay, Walmart, Newegg, Best Buy</td></tr>
+          <tr><td>United Kingdom</td><td><code>gb</code></td><td>Amazon UK, eBay UK, Currys, AliExpress</td></tr>
+          <tr><td>India</td><td><code>in</code></td><td>Amazon IN, Flipkart, AliExpress</td></tr>
+          <tr><td>Australia</td><td><code>au</code></td><td>Amazon AU, eBay AU, AliExpress</td></tr>
+          <tr><td>Japan</td><td><code>jp</code></td><td>Amazon JP, AliExpress</td></tr>
+          <tr><td>Canada</td><td><code>ca</code></td><td>Amazon CA, eBay CA, Newegg CA</td></tr>
+        </tbody>
+      </table>
+      <p>With no country and no currency hint, Crawlr uses the global stores. Add your own shops any
+      time with a YAML file (<code>CRAWLR_CANVAS_RETAILERS</code>).</p>
+      <p><strong>Important:</strong> local marketplaces like <strong>Lazada and Shopee block bots</strong>
+      (just like Amazon). For real results from them, set up a
+      <a href="#config-provider">fetch provider</a> first — otherwise those rows show "blocked or
+      unreachable".</p>
 
       <h2 id="config">Configuration — how settings work</h2>
       <p>Crawlr is configured with <strong>environment variables</strong>. You can set them three ways:</p>
@@ -388,6 +416,7 @@
           <tr><td><code>CRAWLR_FETCH_PROVIDER_KEY</code></td><td>—</td><td>API key for the chosen fetch provider</td></tr>
           <tr><td><code>CRAWLR_FETCH_PROVIDER_RENDER</code></td><td><code>true</code></td><td>Ask the provider to render JavaScript (costs more credits)</td></tr>
           <tr><td><code>CRAWLR_CANVAS_RETAILERS</code></td><td>—</td><td>YAML file adding your own stores to <code>crawlr canvas</code></td></tr>
+          <tr><td><code>CRAWLR_COUNTRY</code></td><td>—</td><td>Default country for <code>crawlr canvas</code> local stores (ISO code, e.g. <code>ph</code>, <code>us</code>)</td></tr>
           <tr><td><code>CRAWLR_MIN_FIELD_CONFIDENCE</code></td><td><code>0.0</code></td><td>Minimum confidence before alerting on a field</td></tr>
           <tr><td><code>CRAWLR_API_KEY</code></td><td>—</td><td>Protects the JSON API when set</td></tr>
         </tbody>

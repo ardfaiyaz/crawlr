@@ -18,6 +18,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Canvas** — `crawlr canvas "<product name>"` suggests which retailers likely
   carry a product so you can compare across stores, plus `CRAWLR_CANVAS_RETAILERS`
   to add your own stores.
+- **Location-aware canvas** — `--country`/`--region` (or `CRAWLR_COUNTRY`, or
+  inferred from the target currency) searches local marketplaces: Lazada/Shopee/
+  Zalora for PH, and regional stores for SG/MY/ID/TH/VN/US/GB/IN/AU/JP/CA.
+- **`crawlr --version`** (`-V`) prints the installed version.
 - **Graceful network-error handling** — DNS/connection failures no longer crash a
   monitor run; the site is retried next cycle instead of recording bad data.
 - **Step-by-step setup guides** — README and the website docs now walk through

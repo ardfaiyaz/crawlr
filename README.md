@@ -132,6 +132,7 @@ rules:
 | `crawlr serve` | Open the web dashboard at `http://localhost:8000` |
 | `crawlr doctor` | Check that your setup works |
 | `crawlr test-alert` | Send a test notification so you know alerts reach you |
+| `crawlr --version` | Print the installed Crawlr version (also `-V`) |
 
 > The `<id>` numbers come from `crawlr watchlist` or `crawlr sites`.
 
@@ -231,6 +232,7 @@ Full reference:
 | `CRAWLR_FETCH_PROVIDER_KEY` | — | API key for the chosen provider |
 | `CRAWLR_FETCH_PROVIDER_RENDER` | `true` | Ask the provider to render JavaScript (costs more credits) |
 | `CRAWLR_CANVAS_RETAILERS` | — | Path to a YAML file adding your own stores to `crawlr canvas` |
+| `CRAWLR_COUNTRY` | — | Default country for `crawlr canvas` local stores (ISO code, e.g. `ph`, `us`) |
 
 ## Step-by-step setup guides
 
@@ -487,13 +489,40 @@ several retailers at once, grabs the best-matching result + price from each, con
 into one currency, and ranks them so you can comparison-shop ("canvas") in one command:
 
 ```bash
-crawlr canvas "Wooting 60HE"                                        # all known retailers
+crawlr canvas "Wooting 60HE"                                        # global stores
+crawlr canvas "MAD60 HE" --country ph                               # Philippine stores (Lazada, Shopee, Zalora)
+crawlr canvas "Wooting 60HE" --to PHP                               # infers --country ph from the currency
 crawlr canvas "Wooting 60HE" --retailers amazon,ebay,newegg --to USD
 ```
 
-Built-in retailers include Amazon, eBay, Walmart, Newegg, Lazada, and AliExpress; add your own
-via a YAML file (`CRAWLR_CANVAS_RETAILERS`). Marketplaces that block bots need a fetch provider
-(above) to return results reliably.
+### Shop your local marketplaces
+
+Canvas is **location-aware**. Pass `--country` (ISO code) — or set `CRAWLR_COUNTRY`, or just use a
+local currency with `--to` — and Crawlr searches that country's stores instead of the global set:
+
+| Country | `--country` | Local stores it searches |
+|---------|-------------|--------------------------|
+| Philippines | `ph` | Lazada PH, Shopee PH, Zalora PH, AliExpress |
+| Singapore | `sg` | Lazada SG, Shopee SG, Amazon SG, AliExpress |
+| Malaysia | `my` | Lazada MY, Shopee MY, AliExpress |
+| Indonesia | `id` | Lazada ID, Shopee ID, Tokopedia, AliExpress |
+| Thailand | `th` | Lazada TH, Shopee TH, AliExpress |
+| Vietnam | `vn` | Lazada VN, Shopee VN, Tiki, AliExpress |
+| United States | `us` | Amazon, eBay, Walmart, Newegg, Best Buy |
+| United Kingdom | `gb` | Amazon UK, eBay UK, Currys, AliExpress |
+| India | `in` | Amazon IN, Flipkart, AliExpress |
+| Australia | `au` | Amazon AU, eBay AU, AliExpress |
+| Japan | `jp` | Amazon JP, AliExpress |
+| Canada | `ca` | Amazon CA, eBay CA, Newegg CA |
+
+If you don't pass a country, Crawlr infers it from your currency (e.g. `--to PHP` → Philippines);
+with no hint at all it uses the global stores. Add your own shops any time via a YAML file
+(`CRAWLR_CANVAS_RETAILERS`).
+
+> **Heads-up (important):** local marketplaces like **Lazada and Shopee aggressively block bots**,
+> just like Amazon. To get real results from them you must set a
+> [fetch provider](#use-a-fetch-provider-recommended-for-marketplaces) first
+> (`CRAWLR_FETCH_PROVIDER` + key). Without one, those rows show "blocked or unreachable".
 
 ## Legal & responsible use
 

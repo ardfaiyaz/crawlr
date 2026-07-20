@@ -117,6 +117,11 @@ FETCH_PROVIDER_HTML_PATH = os.getenv("CRAWLR_FETCH_PROVIDER_HTML_PATH", "")
 #       search_url: "https://myshop.com/search?q={q}"
 CANVAS_RETAILERS_FILE = os.getenv("CRAWLR_CANVAS_RETAILERS", "") or None
 
+# Preferred country for `crawlr canvas` (ISO-3166 alpha-2, e.g. "ph", "us").
+# When set, canvas includes that country's local marketplaces (Lazada/Shopee for
+# PH, etc.). If unset, canvas infers it from the target currency (PHP -> ph).
+CANVAS_COUNTRY = (os.getenv("CRAWLR_COUNTRY", "") or "").strip().lower() or None
+
 # Hosted API: when set, the JSON API requires this key (X-API-Key or Bearer).
 # Left unset, the API is open (fine for local use).
 API_KEY = os.getenv("CRAWLR_API_KEY", "") or None

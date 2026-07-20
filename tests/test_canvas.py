@@ -37,7 +37,7 @@ def test_canvas_converts_currencies(monkeypatch):
     report = canvas.search("Wooting 60HE", retailers=["amazon", "lazada"], base="USD")
     # 100 EUR converts to > 100 USD, so the USD listing is cheaper and ranks first.
     assert report["hits"][0].retailer == "Amazon"
-    lazada = next(h for h in report["hits"] if h.retailer == "Lazada")
+    lazada = next(h for h in report["hits"] if h.retailer == "Lazada PH")
     assert lazada.converted is not None and lazada.converted > 100
 
 
@@ -62,3 +62,22 @@ def test_canvas_resolves_relative_product_url(monkeypatch):
     monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
     report = canvas.search("Wooting 60HE", retailers=["amazon"], base="USD")
     assert report["hits"][0].url.startswith("https://www.amazon.com/")
+
+
+
+def test_canvas_infers_country_from_currency():
+    # PHP -> Philippines local marketplaces; USD -> US.
+    assert canvas.resolve_country(None, "PHP") == "ph"
+    assert canvas.resolve_country(None, "USD") == "us"
+    assert canvas.resolve_country("SG", "USD") == "sg"  # explicit wins
+    ph = canvas.available_retailers("ph")
+    assert "Lazada PH" in {r.name for r in ph.values()}
+    assert "Shopee PH" in {r.name for r in ph.values()}
+
+
+def test_canvas_ph_region_selected_for_php(monkeypatch):
+    mapping = {"lazada.com.ph": [{"title": "MAD60 HE", "price": 3500.0, "currency": "PHP", "url": "/p/1"}]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("MAD60 HE", base="PHP")
+    assert report["country"] == "ph"
+    assert report["hits"] and report["hits"][0].retailer == "Lazada PH"

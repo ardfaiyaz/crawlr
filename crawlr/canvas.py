@@ -44,15 +44,94 @@ class CanvasHit:
     score: float             # 0..1 title-match confidence
 
 
-# Built-in retailers. The marketplace ones need a fetch provider to reliably get
-# past anti-bot; scrape-friendly stores work directly.
-_BUILTIN: dict[str, Retailer] = {
+# Global retailers that ship broadly — a sensible default anywhere.
+# The marketplace ones need a fetch provider to reliably get past anti-bot;
+# scrape-friendly stores work directly.
+_GLOBAL: dict[str, Retailer] = {
     "amazon": Retailer("Amazon", "https://www.amazon.com/s?k={q}"),
     "ebay": Retailer("eBay", "https://www.ebay.com/sch/i.html?_nkw={q}"),
     "walmart": Retailer("Walmart", "https://www.walmart.com/search?q={q}"),
     "newegg": Retailer("Newegg", "https://www.newegg.com/p/pl?d={q}"),
-    "lazada": Retailer("Lazada", "https://www.lazada.com.ph/catalog/?q={q}"),
     "aliexpress": Retailer("AliExpress", "https://www.aliexpress.com/wholesale?SearchText={q}"),
+}
+
+# Local marketplaces by country (ISO-3166 alpha-2). AliExpress ships worldwide,
+# so it's added to most regions as a fallback option.
+_ALIEXPRESS = _GLOBAL["aliexpress"]
+_REGIONS: dict[str, dict[str, Retailer]] = {
+    "ph": {
+        "lazada": Retailer("Lazada PH", "https://www.lazada.com.ph/catalog/?q={q}"),
+        "shopee": Retailer("Shopee PH", "https://shopee.ph/search?keyword={q}"),
+        "zalora": Retailer("Zalora PH", "https://www.zalora.com.ph/search/?q={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "sg": {
+        "lazada": Retailer("Lazada SG", "https://www.lazada.sg/catalog/?q={q}"),
+        "shopee": Retailer("Shopee SG", "https://shopee.sg/search?keyword={q}"),
+        "amazon": Retailer("Amazon SG", "https://www.amazon.sg/s?k={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "my": {
+        "lazada": Retailer("Lazada MY", "https://www.lazada.com.my/catalog/?q={q}"),
+        "shopee": Retailer("Shopee MY", "https://shopee.com.my/search?keyword={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "id": {
+        "lazada": Retailer("Lazada ID", "https://www.lazada.co.id/catalog/?q={q}"),
+        "shopee": Retailer("Shopee ID", "https://shopee.co.id/search?keyword={q}"),
+        "tokopedia": Retailer("Tokopedia", "https://www.tokopedia.com/search?q={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "th": {
+        "lazada": Retailer("Lazada TH", "https://www.lazada.co.th/catalog/?q={q}"),
+        "shopee": Retailer("Shopee TH", "https://shopee.co.th/search?keyword={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "vn": {
+        "lazada": Retailer("Lazada VN", "https://www.lazada.vn/catalog/?q={q}"),
+        "shopee": Retailer("Shopee VN", "https://shopee.vn/search?keyword={q}"),
+        "tiki": Retailer("Tiki", "https://tiki.vn/search?q={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "us": {
+        "amazon": _GLOBAL["amazon"],
+        "ebay": _GLOBAL["ebay"],
+        "walmart": _GLOBAL["walmart"],
+        "newegg": _GLOBAL["newegg"],
+        "bestbuy": Retailer("Best Buy", "https://www.bestbuy.com/site/searchpage.jsp?st={q}"),
+    },
+    "gb": {
+        "amazon": Retailer("Amazon UK", "https://www.amazon.co.uk/s?k={q}"),
+        "ebay": Retailer("eBay UK", "https://www.ebay.co.uk/sch/i.html?_nkw={q}"),
+        "currys": Retailer("Currys", "https://www.currys.co.uk/search?q={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "in": {
+        "amazon": Retailer("Amazon IN", "https://www.amazon.in/s?k={q}"),
+        "flipkart": Retailer("Flipkart", "https://www.flipkart.com/search?q={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "au": {
+        "amazon": Retailer("Amazon AU", "https://www.amazon.com.au/s?k={q}"),
+        "ebay": Retailer("eBay AU", "https://www.ebay.com.au/sch/i.html?_nkw={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "jp": {
+        "amazon": Retailer("Amazon JP", "https://www.amazon.co.jp/s?k={q}"),
+        "aliexpress": _ALIEXPRESS,
+    },
+    "ca": {
+        "amazon": Retailer("Amazon CA", "https://www.amazon.ca/s?k={q}"),
+        "ebay": Retailer("eBay CA", "https://www.ebay.ca/sch/i.html?_nkw={q}"),
+        "newegg": Retailer("Newegg CA", "https://www.newegg.ca/p/pl?d={q}"),
+    },
+}
+
+# Infer a country from the target currency when one isn't given explicitly.
+_CCY_COUNTRY: dict[str, str] = {
+    "PHP": "ph", "SGD": "sg", "MYR": "my", "IDR": "id", "THB": "th",
+    "VND": "vn", "USD": "us", "GBP": "gb", "INR": "in", "AUD": "au",
+    "JPY": "jp", "CAD": "ca",
 }
 
 # Minimum title-similarity for a search result to count as "the product".
@@ -83,20 +162,53 @@ def _load_user_retailers() -> dict[str, Retailer]:
     return out
 
 
-def available_retailers() -> dict[str, Retailer]:
-    """All known retailers: built-ins plus any from the user's YAML file."""
-    merged = dict(_BUILTIN)
-    merged.update(_load_user_retailers())
+def resolve_country(country: str | None = None, base_ccy: str | None = None) -> str | None:
+    """Work out which country's marketplaces to use.
+
+    Priority: explicit ``country`` arg > ``CRAWLR_COUNTRY`` env > inferred from
+    the target currency (e.g. PHP -> ph). Returns ``None`` if nothing matches,
+    in which case the global retailer set is used.
+    """
+    if country and country.strip():
+        return country.strip().lower()
+    if config.CANVAS_COUNTRY:
+        return config.CANVAS_COUNTRY
+    if base_ccy:
+        return _CCY_COUNTRY.get(base_ccy.upper())
+    return None
+
+
+def available_retailers(country: str | None = None) -> dict[str, Retailer]:
+    """Known retailers for a country (or the global set), plus the user's YAML."""
+    if country and country in _REGIONS:
+        merged = dict(_REGIONS[country])
+    else:
+        merged = dict(_GLOBAL)
+    merged.update(_load_user_retailers())  # user entries win / extend
     return merged
 
 
-def _select(names: list[str] | None) -> list[Retailer]:
-    catalog = available_retailers()
+def _flat_catalog() -> dict[str, Retailer]:
+    """Every known retailer, for resolving explicitly-named stores regardless of
+    the active region. First-seen wins for shared keys (so ``lazada`` -> PH),
+    then canonical global names and the user's own entries take precedence."""
+    flat: dict[str, Retailer] = {}
+    for region in _REGIONS.values():
+        for key, r in region.items():
+            flat.setdefault(key, r)
+    flat.update(_GLOBAL)
+    flat.update(_load_user_retailers())
+    return flat
+
+
+def _select(names: list[str] | None, catalog: dict[str, Retailer]) -> list[Retailer]:
     if not names:
         return list(catalog.values())
+    fallback = _flat_catalog()
     chosen: list[Retailer] = []
     for n in names:
-        r = catalog.get(n.strip().lower())
+        key = n.strip().lower()
+        r = catalog.get(key) or fallback.get(key)
         if r:
             chosen.append(r)
     return chosen
@@ -137,14 +249,22 @@ def search(
     query: str,
     retailers: list[str] | None = None,
     base: str | None = None,
+    country: str | None = None,
     force_js: bool = False,
 ) -> dict:
-    """Search each retailer for ``query`` and return ranked price hits."""
+    """Search each retailer for ``query`` and return ranked price hits.
+
+    ``country`` (ISO-3166 alpha-2) selects local marketplaces; when omitted it's
+    inferred from the target currency, falling back to the global retailer set.
+    """
     base_ccy = (base or config.FX_BASE).upper()
+    resolved_country = resolve_country(country, base_ccy)
+    catalog = available_retailers(resolved_country)
     rates, fx_source = currency.get_rates()
     hits: list[CanvasHit] = []
+    selected = _select(retailers, catalog)
 
-    for retailer in _select(retailers):
+    for retailer in selected:
         url = retailer.search_url.format(q=quote_plus(query))
         try:
             result = scrape(url, ecommerce.PRODUCT_LIST_SCHEMA, force_js=force_js)
@@ -175,4 +295,11 @@ def search(
 
     # Cheapest first; hits without a convertible price sink to the bottom.
     hits.sort(key=lambda h: (h.converted is None, h.converted if h.converted is not None else 0.0))
-    return {"query": query, "base": base_ccy, "fx_source": fx_source, "hits": hits}
+    return {
+        "query": query,
+        "base": base_ccy,
+        "country": resolved_country,
+        "fx_source": fx_source,
+        "retailers_searched": [r.name for r in selected],
+        "hits": hits,
+    }
