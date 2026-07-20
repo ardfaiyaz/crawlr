@@ -18,9 +18,12 @@ import difflib
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import quote_plus, urldefrag, urljoin
+
+import httpx
 
 from . import config, currency
 from .extractor import scrape
@@ -28,11 +31,17 @@ from .verticals import ecommerce
 
 logger = logging.getLogger("crawlr.canvas")
 
+# A search adapter takes a query and returns product dicts
+# ({title, price, currency, url}) straight from a store's JSON API — far more
+# reliable than scraping a JS-rendered search page. Returns [] on any failure.
+SearchAdapter = Callable[[str], list[dict]]
+
 
 @dataclass
 class Retailer:
     name: str
     search_url: str  # template containing "{q}" where the query goes
+    adapter: SearchAdapter | None = None  # optional structured-API search
 
 
 @dataclass
@@ -44,6 +53,107 @@ class CanvasHit:
     url: str
     converted: float | None  # price in the base currency (None if not convertible)
     score: float             # 0..1 title-match confidence
+
+
+# --- Structured-API search adapters -----------------------------------------
+# Big marketplaces render their search results with JavaScript, so scraping the
+# HTML yields nothing. But their own apps call JSON endpoints that return clean
+# product data — we use those directly (best-effort; fall back to HTML on error).
+
+
+def _to_float(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not value:
+        return None
+    m = re.search(r"[\d][\d,.]*", str(value))
+    if not m:
+        return None
+    try:
+        return float(m.group(0).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _api_get(url: str, headers: dict[str, str]) -> dict:
+    resp = httpx.get(
+        url,
+        headers={"User-Agent": config.FETCH.user_agent, "Accept": "application/json", **headers},
+        timeout=config.FETCH.timeout_seconds,
+        follow_redirects=True,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _lazada_adapter(domain: str, ccy: str) -> SearchAdapter:
+    """Lazada exposes its search results as JSON via ?ajax=true."""
+
+    def _search(query: str) -> list[dict]:
+        url = (
+            f"https://{domain}/catalog/?ajax=true&isFirstRequest=true&q={quote_plus(query)}"
+        )
+        data = _api_get(url, {"Referer": f"https://{domain}/"})
+        items = ((data or {}).get("mods") or {}).get("listItems") or []
+        out: list[dict] = []
+        for it in items:
+            name = it.get("name")
+            if not name:
+                continue
+            purl = str(it.get("productUrl") or "")
+            if purl.startswith("//"):
+                purl = "https:" + purl
+            out.append(
+                {
+                    "title": name,
+                    "price": _to_float(it.get("price") or it.get("priceShow")),
+                    "currency": ccy,
+                    "url": purl,
+                }
+            )
+        return out
+
+    return _search
+
+
+def _shopee_adapter(domain: str, ccy: str) -> SearchAdapter:
+    """Shopee's app calls /api/v4/search/search_items, which returns JSON.
+    Prices come in micro-units (actual price = price / 100000)."""
+
+    def _search(query: str) -> list[dict]:
+        api = (
+            f"https://{domain}/api/v4/search/search_items?by=relevancy"
+            f"&keyword={quote_plus(query)}&limit=20&newest=0&order=desc"
+            "&page_type=search&scenario=PAGE_GLOBAL_SEARCH&version=2"
+        )
+        data = _api_get(
+            api,
+            {
+                "Referer": f"https://{domain}/search?keyword={quote_plus(query)}",
+                "x-api-source": "pc",
+                "x-shopee-language": "en",
+                "af-ac-enc-dat": "",
+            },
+        )
+        out: list[dict] = []
+        for it in data.get("items") or []:
+            basic = it.get("item_basic") or it
+            name = basic.get("name")
+            price = basic.get("price")
+            if not name or not isinstance(price, (int, float)):
+                continue
+            shopid, itemid = basic.get("shopid"), basic.get("itemid")
+            purl = (
+                f"https://{domain}/product/{shopid}/{itemid}"
+                if shopid and itemid
+                else f"https://{domain}/search?keyword={quote_plus(query)}"
+            )
+            out.append(
+                {"title": name, "price": price / 100000.0, "currency": ccy, "url": purl}
+            )
+        return out
+
+    return _search
 
 
 # Global retailers that ship broadly — a sensible default anywhere.
@@ -62,8 +172,14 @@ _GLOBAL: dict[str, Retailer] = {
 _ALIEXPRESS = _GLOBAL["aliexpress"]
 _REGIONS: dict[str, dict[str, Retailer]] = {
     "ph": {
-        "lazada": Retailer("Lazada PH", "https://www.lazada.com.ph/catalog/?q={q}"),
-        "shopee": Retailer("Shopee PH", "https://shopee.ph/search?keyword={q}"),
+        "lazada": Retailer(
+            "Lazada PH", "https://www.lazada.com.ph/catalog/?q={q}",
+            _lazada_adapter("www.lazada.com.ph", "PHP"),
+        ),
+        "shopee": Retailer(
+            "Shopee PH", "https://shopee.ph/search?keyword={q}",
+            _shopee_adapter("shopee.ph", "PHP"),
+        ),
         "zalora": Retailer("Zalora PH", "https://www.zalora.com.ph/search/?q={q}"),
         "galleon": Retailer("Galleon PH", "https://www.galleon.ph/catalogsearch/result/?q={q}"),
         "carousell": Retailer("Carousell PH", "https://www.carousell.ph/search/{q}"),
@@ -72,30 +188,60 @@ _REGIONS: dict[str, dict[str, Retailer]] = {
         "ebay": _GLOBAL["ebay"],
     },
     "sg": {
-        "lazada": Retailer("Lazada SG", "https://www.lazada.sg/catalog/?q={q}"),
-        "shopee": Retailer("Shopee SG", "https://shopee.sg/search?keyword={q}"),
+        "lazada": Retailer(
+            "Lazada SG", "https://www.lazada.sg/catalog/?q={q}",
+            _lazada_adapter("www.lazada.sg", "SGD"),
+        ),
+        "shopee": Retailer(
+            "Shopee SG", "https://shopee.sg/search?keyword={q}",
+            _shopee_adapter("shopee.sg", "SGD"),
+        ),
         "amazon": Retailer("Amazon SG", "https://www.amazon.sg/s?k={q}"),
         "aliexpress": _ALIEXPRESS,
     },
     "my": {
-        "lazada": Retailer("Lazada MY", "https://www.lazada.com.my/catalog/?q={q}"),
-        "shopee": Retailer("Shopee MY", "https://shopee.com.my/search?keyword={q}"),
+        "lazada": Retailer(
+            "Lazada MY", "https://www.lazada.com.my/catalog/?q={q}",
+            _lazada_adapter("www.lazada.com.my", "MYR"),
+        ),
+        "shopee": Retailer(
+            "Shopee MY", "https://shopee.com.my/search?keyword={q}",
+            _shopee_adapter("shopee.com.my", "MYR"),
+        ),
         "aliexpress": _ALIEXPRESS,
     },
     "id": {
-        "lazada": Retailer("Lazada ID", "https://www.lazada.co.id/catalog/?q={q}"),
-        "shopee": Retailer("Shopee ID", "https://shopee.co.id/search?keyword={q}"),
+        "lazada": Retailer(
+            "Lazada ID", "https://www.lazada.co.id/catalog/?q={q}",
+            _lazada_adapter("www.lazada.co.id", "IDR"),
+        ),
+        "shopee": Retailer(
+            "Shopee ID", "https://shopee.co.id/search?keyword={q}",
+            _shopee_adapter("shopee.co.id", "IDR"),
+        ),
         "tokopedia": Retailer("Tokopedia", "https://www.tokopedia.com/search?q={q}"),
         "aliexpress": _ALIEXPRESS,
     },
     "th": {
-        "lazada": Retailer("Lazada TH", "https://www.lazada.co.th/catalog/?q={q}"),
-        "shopee": Retailer("Shopee TH", "https://shopee.co.th/search?keyword={q}"),
+        "lazada": Retailer(
+            "Lazada TH", "https://www.lazada.co.th/catalog/?q={q}",
+            _lazada_adapter("www.lazada.co.th", "THB"),
+        ),
+        "shopee": Retailer(
+            "Shopee TH", "https://shopee.co.th/search?keyword={q}",
+            _shopee_adapter("shopee.co.th", "THB"),
+        ),
         "aliexpress": _ALIEXPRESS,
     },
     "vn": {
-        "lazada": Retailer("Lazada VN", "https://www.lazada.vn/catalog/?q={q}"),
-        "shopee": Retailer("Shopee VN", "https://shopee.vn/search?keyword={q}"),
+        "lazada": Retailer(
+            "Lazada VN", "https://www.lazada.vn/catalog/?q={q}",
+            _lazada_adapter("www.lazada.vn", "VND"),
+        ),
+        "shopee": Retailer(
+            "Shopee VN", "https://shopee.vn/search?keyword={q}",
+            _shopee_adapter("shopee.vn", "VND"),
+        ),
         "tiki": Retailer("Tiki", "https://tiki.vn/search?q={q}"),
         "aliexpress": _ALIEXPRESS,
     },
@@ -352,7 +498,8 @@ _JUNK_RE = re.compile(
     r"^(results?|search results?|showing|no results|did you mean|sponsored|"
     r"related searches|filters?|sort by|categories?|see all|view all|"
     r"best sellers?|recommended|you may also|price|shop by)\b"
-    r"|results? for\b|search results?\b",
+    r"|results? for\b|search results?\b|view all\b|\bads? in\b|\ball listings\b"
+    r"|\bbrowse\b|for sale in\b",
     re.IGNORECASE,
 )
 
@@ -458,17 +605,30 @@ def _search_one(
     """Search a single retailer. Returns ``(status, hits)`` where status is one
     of ``ok`` / ``blocked`` / ``error`` / ``nomatch``. Never raises."""
     url = retailer.search_url.format(q=quote_plus(query))
-    try:
-        result = scrape(url, ecommerce.PRODUCT_LIST_SCHEMA, force_js=force_js)
-    except Exception as exc:  # one retailer failing must not stop the canvas
-        logger.warning("Canvas: %s failed: %s", retailer.name, exc)
-        return "error", []
-    if getattr(result, "blocked", False):
-        logger.warning("Canvas: %s blocked or unreachable", retailer.name)
-        return "blocked", []
+
+    # 1) Prefer the store's structured JSON API (reliable products + prices).
+    records: list[dict] = []
+    if retailer.adapter is not None:
+        try:
+            records = retailer.adapter(query) or []
+        except Exception as exc:  # API changed / blocked -> fall back to HTML
+            logger.info("Canvas: %s API adapter failed (%s); trying HTML", retailer.name, exc)
+            records = []
+
+    # 2) Fall back to scraping the HTML search page (auto JS-rendered if needed).
+    if not records:
+        try:
+            result = scrape(url, ecommerce.PRODUCT_LIST_SCHEMA, force_js=force_js)
+        except Exception as exc:  # one retailer failing must not stop the canvas
+            logger.warning("Canvas: %s failed: %s", retailer.name, exc)
+            return "error", []
+        if getattr(result, "blocked", False):
+            logger.warning("Canvas: %s blocked or unreachable", retailer.name)
+            return "blocked", []
+        records = result.records
 
     hits: list[CanvasHit] = []
-    for match in _top_matches(query, result.records, per_store, search_url=url):
+    for match in _top_matches(query, records, per_store, search_url=url):
         rec = match["rec"]
         price = rec.get("price") if isinstance(rec.get("price"), (int, float)) else None
         native_ccy = rec.get("currency")

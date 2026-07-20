@@ -20,7 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
-        <span class="ver">v0.5.0</span>
+        <span class="ver">v0.5.1</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -239,10 +239,14 @@
       <code>CRAWLR_CANVAS_PER_STORE</code>). Search-page chrome ("Results for …", bare query echoes)
       is filtered out for accuracy, and stores that block bots are listed with a hint to turn on a
       <a href="#config-provider">fetch provider</a>.</p>
-      <p><strong>Important:</strong> local marketplaces like <strong>Lazada and Shopee block bots</strong>
-      (just like Amazon). For real results from them, set up a
-      <a href="#config-provider">fetch provider</a> first — otherwise those rows show "blocked or
-      unreachable".</p>
+      <p><strong>Smart multi-strategy search.</strong> For big marketplaces, Crawlr queries the
+      store's own <strong>structured JSON search API</strong> first (the endpoints their apps use) —
+      so <strong>Lazada and Shopee return real products with prices for free</strong>, no fetch
+      provider needed. If an API is unavailable it falls back to scraping the HTML page, rendering
+      JavaScript automatically when needed.</p>
+      <p><strong>Note:</strong> the toughest marketplaces (Amazon, or Shopee from a datacenter/VPN IP)
+      may still block automated requests — Crawlr says so explicitly, and a
+      <a href="#config-provider">fetch provider</a> is the most reliable fallback.</p>
 
       <h2 id="config">Configuration — how settings work</h2>
       <p>Crawlr is configured with <strong>environment variables</strong>. You can set them three ways:</p>

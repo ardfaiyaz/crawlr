@@ -541,10 +541,15 @@ the Philippines, it automatically searches Lazada PH, Shopee PH, and Zalora PH. 
 off with `CRAWLR_GEO=false` (fully offline). Add your own shops any time via a YAML file
 (`CRAWLR_CANVAS_RETAILERS`).
 
-> **Heads-up (important):** local marketplaces like **Lazada and Shopee aggressively block bots**,
-> just like Amazon. To get real results from them you must set a
-> [fetch provider](#use-a-fetch-provider-recommended-for-marketplaces) first
-> (`CRAWLR_FETCH_PROVIDER` + key). Without one, those rows show "blocked or unreachable".
+**Smart multi-strategy search.** For big marketplaces, Crawlr queries the store's own
+**structured JSON search API** first (the same endpoints their apps use) — so **Lazada and Shopee
+return real products with prices for free**, no fetch provider needed. If an API is unavailable it
+falls back to scraping the HTML search page, auto-rendering JavaScript when required.
+
+> **Heads-up:** the toughest marketplaces (Amazon, or Shopee from a datacenter/VPN IP) may still
+> block automated requests. When that happens Crawlr says so explicitly, and a
+> [fetch provider](#use-a-fetch-provider-recommended-for-marketplaces)
+> (`CRAWLR_FETCH_PROVIDER` + key) is the most reliable fallback.
 
 ## Legal & responsible use
 

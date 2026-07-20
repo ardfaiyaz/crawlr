@@ -2,8 +2,21 @@
 
 from __future__ import annotations
 
+import pytest
+
 from crawlr import canvas
 from crawlr.models import ExtractionResult
+
+
+@pytest.fixture(autouse=True)
+def _adapters_offline(monkeypatch):
+    """Canvas API adapters must never hit the network in tests — force the HTML
+    fallback (which tests mock via `scrape`). Individual tests can override."""
+
+    def _offline(*args, **kwargs):
+        raise RuntimeError("network disabled in tests")
+
+    monkeypatch.setattr(canvas, "_api_get", _offline)
 
 
 def _fake_scrape(mapping: dict[str, list[dict]]):
@@ -194,3 +207,68 @@ def test_canvas_rejects_search_page_echo(monkeypatch):
     monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
     report = canvas.search("logitech mouse", retailers=["amazon"], base="USD")
     assert report["hits"] == []
+
+
+
+def test_lazada_adapter_parses_json(monkeypatch):
+    payload = {
+        "mods": {
+            "listItems": [
+                {"name": "MAD60 HE Keyboard", "price": "3499.00",
+                 "productUrl": "//www.lazada.com.ph/products/x.html"},
+                {"name": "Keycaps", "priceShow": "₱1,299", "productUrl": "https://www.lazada.com.ph/y.html"},
+            ]
+        }
+    }
+    monkeypatch.setattr(canvas, "_api_get", lambda url, headers: payload)
+    recs = canvas._lazada_adapter("www.lazada.com.ph", "PHP")("mad60 he")
+    assert recs[0]["title"] == "MAD60 HE Keyboard"
+    assert recs[0]["price"] == 3499.0
+    assert recs[0]["currency"] == "PHP"
+    assert recs[0]["url"].startswith("https://")
+    assert recs[1]["price"] == 1299.0  # parsed from "₱1,299"
+
+
+def test_shopee_adapter_parses_json(monkeypatch):
+    payload = {"items": [{"item_basic": {"name": "MAD60 HE", "price": 349900000, "shopid": 1, "itemid": 2}}]}
+    monkeypatch.setattr(canvas, "_api_get", lambda url, headers: payload)
+    recs = canvas._shopee_adapter("shopee.ph", "PHP")("mad60 he")
+    assert recs[0]["title"] == "MAD60 HE"
+    assert recs[0]["price"] == 3499.0                       # micro-units / 100000
+    assert recs[0]["url"] == "https://shopee.ph/product/1/2"
+
+
+def test_canvas_uses_store_api_when_available(monkeypatch):
+    payload = {
+        "mods": {"listItems": [
+            {"name": "MAD60 HE Wired Keyboard", "price": "3499",
+             "productUrl": "https://www.lazada.com.ph/products/x.html"}
+        ]}
+    }
+    monkeypatch.setattr(canvas, "_api_get", lambda url, headers: payload)
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape({}))  # HTML would find nothing
+    report = canvas.search("mad60 he", retailers=["lazada"], base="PHP", country="ph")
+    assert any(h.retailer == "Lazada PH" and h.price == 3499.0 for h in report["hits"])
+
+
+def test_canvas_api_failure_falls_back_to_html(monkeypatch):
+    # Adapter raises (offline fixture); HTML fallback (mocked) still yields a hit.
+    mapping = {"lazada.com.ph": [
+        {"title": "MAD60 HE Keyboard", "price": 3499.0, "currency": "PHP", "url": "/p/1"}
+    ]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("mad60 he", retailers=["lazada"], base="PHP", country="ph")
+    assert any(h.retailer == "Lazada PH" for h in report["hits"])
+
+
+def test_canvas_filters_view_all_ads(monkeypatch):
+    mapping = {"amazon": [
+        {"title": "mad60+he - View all mad60+he ads in Carousell Philippines",
+         "price": 60.0, "currency": "PHP", "url": "/s"},
+        {"title": "MAD60 HE Keyboard", "price": 3499.0, "currency": "PHP", "url": "/p/1"},
+    ]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("mad60 he", retailers=["amazon"], base="PHP")
+    titles = [h.title for h in report["hits"]]
+    assert "MAD60 HE Keyboard" in titles
+    assert all("View all" not in t for t in titles)  # heading rejected

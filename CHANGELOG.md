@@ -6,6 +6,20 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.1]
+
+### Added
+- **Structured-API canvas search** — for big marketplaces, canvas now queries the
+  store's own JSON search endpoint first (Lazada's `?ajax=true`, Shopee's
+  `/api/v4/search/search_items`), returning real products + prices *for free*
+  without a fetch provider. Falls back to HTML (auto JS-rendered) if the API is
+  unavailable, so results are strictly better than before.
+
+### Changed
+- **Stricter junk filtering** — search-page headings like "View all … ads",
+  "… ads in <store>", "browse …" are now rejected, so bogus rows (e.g. a fake
+  "60" price scraped from a heading) no longer appear.
+
 ## [0.5.0]
 
 ### Changed
