@@ -158,6 +158,11 @@ CANVAS_API_TIMEOUT = float(os.getenv("CRAWLR_CANVAS_API_TIMEOUT", "8"))
 # Keep expanding the query (plural/singular, drop brand/model, no-space, …) and
 # retrying until at least this many products are found. 0 disables expansion.
 CANVAS_MIN_RESULTS = max(0, int(os.getenv("CRAWLR_CANVAS_MIN_RESULTS", "20")))
+# Persist every canvas result to build cross-store price history, so canvas can
+# flag all-time lows and "% below the usual price". Set false to disable.
+CANVAS_HISTORY = os.getenv("CRAWLR_CANVAS_HISTORY", "true").lower() == "true"
+# How many days of canvas price history to consider when scoring a deal.
+CANVAS_HISTORY_DAYS = max(0, int(os.getenv("CRAWLR_CANVAS_HISTORY_DAYS", "90")))
 
 # Hosted API: when set, the JSON API requires this key (X-API-Key or Bearer).
 # Left unset, the API is open (fine for local use).

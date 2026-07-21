@@ -478,9 +478,15 @@ def canvas(
         best = next((h for h in hits if h.converted is not None), None)
         if not best:
             return
-        deal = ""
-        if best.deal_pct and best.deal_pct > 0:
+        if best.all_time_low and best.hist_count >= 3:
+            deal = f" [bold green](all-time low across {best.hist_count} checks!)[/bold green]"
+        elif best.hist_avg and best.converted < best.hist_avg:
+            off = round((best.hist_avg - best.converted) / best.hist_avg * 100)
+            deal = f" [green]({off}% below its usual {base} {best.hist_avg:g})[/green]"
+        elif best.deal_pct and best.deal_pct > 0:
             deal = f" [green]({best.deal_pct:g}% below median — good time to buy)[/green]"
+        else:
+            deal = ""
         console.print(
             f"[green]Best deal:[/green] {best.retailer} — {best.title} "
             f"at {base} {best.converted:g}{deal}\n[dim]{best.url}[/dim]"

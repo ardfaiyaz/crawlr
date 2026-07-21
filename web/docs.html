@@ -20,7 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
-        <span class="ver">v0.8.0</span>
+        <span class="ver">v0.9.0</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -253,8 +253,10 @@
       <p><strong>Accurate matching.</strong> A <strong>product-identity resolver</strong> decides when
       two listings are the same product — by GTIN/barcode, then SKU + brand, then brand + model code
       (<code>g502</code>, <code>60he</code>) — so <code>--group</code> compares the same item across
-      shops without merging different models. Every listing is <strong>deal-scored</strong> against
-      the cross-store median.</p>
+      shops without merging different models. Every listing is <strong>deal-scored</strong> against the
+      cross-store median <em>and</em> the product's own <strong>price history across stores</strong>
+      (canvas persists every result), so the best buy is flagged as "18% below its usual price" or
+      "all-time low". Disable with <code>CRAWLR_CANVAS_HISTORY=false</code>.</p>
       <p><strong>Close the loop:</strong> <code>--watch --target 5000</code> turns a search into
       tracked watches across every store it found, so the normal monitor + alert stack pings you when
       any store drops.</p>
@@ -480,6 +482,8 @@
           <tr><td><code>CRAWLR_CANVAS_WORKERS</code></td><td><code>10</code></td><td>Retailers searched concurrently by <code>crawlr canvas</code> (1 = serial)</td></tr>
           <tr><td><code>CRAWLR_CANVAS_MIN_RESULTS</code></td><td><code>20</code></td><td>Auto-expand &amp; retry the query until at least this many products are found (0 = off)</td></tr>
           <tr><td><code>CRAWLR_CANVAS_API_TIMEOUT</code></td><td><code>8</code></td><td>Timeout (s) for a store's structured-API probe before falling back to HTML</td></tr>
+          <tr><td><code>CRAWLR_CANVAS_HISTORY</code></td><td><code>true</code></td><td>Persist canvas results for cross-store price history (all-time-low / deal scoring)</td></tr>
+          <tr><td><code>CRAWLR_CANVAS_HISTORY_DAYS</code></td><td><code>90</code></td><td>Days of canvas price history considered when scoring a deal</td></tr>
           <tr><td><code>CRAWLR_MIN_FIELD_CONFIDENCE</code></td><td><code>0.0</code></td><td>Minimum confidence before alerting on a field</td></tr>
           <tr><td><code>CRAWLR_API_KEY</code></td><td>—</td><td>Protects the JSON API when set</td></tr>
         </tbody>

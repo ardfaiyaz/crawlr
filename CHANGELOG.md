@@ -6,6 +6,17 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0]
+
+### Added
+- **Cross-store price history + deal-over-time (the data moat).** Canvas now
+  persists every result to a `canvas_prices` table keyed by product identity, and
+  scores each listing against that product's own history across stores — flagging
+  "N% below its usual price" or "all-time low". History accrues the more you use
+  it. Configurable via `CRAWLR_CANVAS_HISTORY` (default on) and
+  `CRAWLR_CANVAS_HISTORY_DAYS` (default 90). Best-effort: storage errors never
+  fail a search.
+
 ## [0.8.0]
 
 ### Added

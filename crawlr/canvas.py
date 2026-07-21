@@ -67,6 +67,10 @@ class CanvasHit:
     gtin: str | None = None
     brand: str | None = None
     deal_pct: float | None = None     # % below the cross-store median (+ = cheaper)
+    all_time_low: bool = False        # cheapest this product has been in our history
+    hist_low: float | None = None     # historical low (base currency)
+    hist_avg: float | None = None     # historical average
+    hist_count: int = 0               # how many historical price points we have
 
 
 # --- Structured-API search adapters -----------------------------------------
@@ -989,6 +993,53 @@ def group_hits(hits: list[CanvasHit]) -> list[list[CanvasHit]]:
     return [g["hits"] for g in groups]
 
 
+def _apply_price_history(hits: list[CanvasHit], base_ccy: str) -> None:
+    """Attach historical low/avg + all-time-low flags to each hit, then persist
+    today's prices so the history (and the moat) grows over time. Best-effort:
+    any storage error is swallowed so a search never fails on it."""
+    if not config.CANVAS_HISTORY or not hits:
+        return
+    from . import storage
+
+    try:
+        storage.init_db()  # idempotent; ensures the canvas_prices table exists
+    except Exception:
+        return
+
+    keys: dict[int, str] = {}
+    stats_cache: dict[str, dict] = {}
+    for h in hits:
+        key = identity.product_key(h.title, gtin=h.gtin, sku=h.sku, brand=h.brand)
+        keys[id(h)] = key
+        if h.converted is None:
+            continue
+        if key not in stats_cache:
+            try:
+                stats_cache[key] = storage.canvas_price_stats(
+                    key, base_ccy, days=config.CANVAS_HISTORY_DAYS
+                )
+            except Exception:
+                stats_cache[key] = {"count": 0, "low": None, "avg": None}
+        st = stats_cache[key]
+        if st.get("count", 0) >= 3 and st.get("low") is not None:
+            h.hist_low = st["low"]
+            h.hist_avg = st.get("avg")
+            h.hist_count = st["count"]
+            h.all_time_low = h.converted <= st["low"] + 0.005
+
+    entries = [
+        {
+            "product_key": keys[id(h)], "retailer": h.retailer, "title": h.title,
+            "url": h.url, "price": h.converted, "currency": base_ccy,
+        }
+        for h in hits if h.converted is not None
+    ]
+    try:
+        storage.record_canvas_prices(entries)
+    except Exception:
+        pass
+
+
 def _price_stats(hits: list[CanvasHit]) -> dict:
     """Min/max/avg/median (+ savings) over the converted prices we have."""
     import statistics
@@ -1103,6 +1154,10 @@ def search(
         for h in hits:
             if h.converted is not None:
                 h.deal_pct = round((median - h.converted) / median * 100, 1)
+
+    # Historical deal scoring: compare each listing to this product's own price
+    # history across stores, then record today's prices to grow that history.
+    _apply_price_history(hits, base_ccy)
 
     _sort_hits(hits, sort)
     # Cap the final results per store (expansion may have gathered extras).

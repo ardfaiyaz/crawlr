@@ -91,6 +91,21 @@ def canonical_key(
     return None
 
 
+def product_key(
+    title: str, gtin: str | None = None, sku: str | None = None, brand: str | None = None
+) -> str:
+    """A stable key for price-history grouping: the strongest identity signal,
+    else brand + model codes, else the normalized title."""
+    strong = canonical_key(gtin, sku, brand, title)
+    if strong:
+        return strong
+    b = brand_of(title, brand)
+    models = sorted(model_tokens(title))
+    if b and models:
+        return f"bm:{b}:{'-'.join(models)}"
+    return f"t:{_norm(title)}"
+
+
 def _brands_compatible(a: _Listing, b: _Listing) -> bool:
     ba = brand_of(a.title, a.brand)
     bb = brand_of(b.title, b.brand)

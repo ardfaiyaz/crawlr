@@ -241,6 +241,8 @@ Full reference:
 | `CRAWLR_CANVAS_WORKERS` | `10` | Retailers searched concurrently by `crawlr canvas` (1 = serial) |
 | `CRAWLR_CANVAS_MIN_RESULTS` | `20` | Auto-expand & retry the query until at least this many products are found (0 = off) |
 | `CRAWLR_CANVAS_API_TIMEOUT` | `8` | Timeout (s) for a store's structured-API probe before falling back to HTML |
+| `CRAWLR_CANVAS_HISTORY` | `true` | Persist canvas results to build cross-store price history (all-time-low / deal scoring) |
+| `CRAWLR_CANVAS_HISTORY_DAYS` | `90` | Days of canvas price history considered when scoring a deal |
 
 ## Step-by-step setup guides
 
@@ -564,8 +566,10 @@ also retries with a **mobile user-agent** (lighter, less protected) before escal
 (e.g. `g502`, `60he`) — so `--group` compares the same item across shops without merging different
 models.
 
-**Deal scoring.** Every listing is scored against the cross-store **median**, and the best buy is
-flagged (e.g. *"18% below median — good time to buy"*).
+**Deal scoring + price history (the moat).** Every listing is scored against the cross-store
+**median**, and — because canvas persists every result — against the product's **own price history
+across stores**. The best buy is flagged as *"18% below its usual ₱X"* or *"all-time low!"*. The
+longer you use it, the smarter the deal calls get. Disable with `CRAWLR_CANVAS_HISTORY=false`.
 
 It also:
 

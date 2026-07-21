@@ -533,6 +533,66 @@ def _parse_field_sources(run: dict | None) -> dict:
 
 
 
+# ---------------------------------------------------------------------------
+# Canvas cross-store price history (the data moat)
+# ---------------------------------------------------------------------------
+
+
+def record_canvas_prices(entries: list[dict]) -> None:
+    """Persist canvas results as time-series points, keyed by product identity.
+
+    Each entry: {product_key, retailer, title, url, price, currency}. Only
+    positive prices are stored. Prices are the already-converted display value,
+    with ``currency`` so history is compared like-for-like.
+    """
+    rows = [
+        e for e in entries
+        if isinstance(e.get("price"), (int, float)) and not isinstance(e["price"], bool)
+        and e["price"] > 0 and e.get("product_key")
+    ]
+    if not rows:
+        return
+    ts = _now_iso()
+    with db.connect() as conn:
+        for e in rows:
+            conn.execute(
+                db.q(
+                    "INSERT INTO canvas_prices "
+                    "(product_key, retailer, title, url, price, currency, at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                ),
+                (e["product_key"], e.get("retailer"), e.get("title"),
+                 e.get("url"), float(e["price"]), e.get("currency"), ts),
+            )
+
+
+def canvas_price_stats(product_key: str, currency: str, days: int = 90) -> dict:
+    """Historical low/high/avg/median for a product across stores, in one
+    currency and within ``days`` (0 = all time). Empty when no history yet."""
+    import statistics
+    from datetime import timedelta
+
+    params: tuple
+    sql = "SELECT price FROM canvas_prices WHERE product_key=? AND currency=?"
+    params = (product_key, currency)
+    if days > 0:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        sql += " AND at>=?"
+        params = (product_key, currency, cutoff)
+    with db.connect() as conn:
+        rows = conn.execute(db.q(sql), params).fetchall()
+    values = [float(r["price"]) for r in rows if r["price"] is not None]
+    if not values:
+        return {"count": 0, "low": None, "high": None, "avg": None, "median": None}
+    return {
+        "count": len(values),
+        "low": round(min(values), 2),
+        "high": round(max(values), 2),
+        "avg": round(statistics.mean(values), 2),
+        "median": round(statistics.median(values), 2),
+    }
+
+
 def site_stats() -> list[dict]:
     """Per-site health metrics: run count, average confidence, heal count."""
     with db.connect() as conn:

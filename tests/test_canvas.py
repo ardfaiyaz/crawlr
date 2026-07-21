@@ -478,3 +478,31 @@ def test_report_exposes_strategies_used(monkeypatch):
     monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
     report = canvas.search("mad60 he", retailers=["amazon"], base="USD", expand=False)
     assert "selectors" in report["strategies_used"]
+
+
+
+def test_canvas_price_history_flags_all_time_low(monkeypatch):
+    def scrape_at(price):
+        return _fake_scrape(
+            {"amazon": [{"title": "MAD60 HE Keyboard", "price": price, "currency": "USD", "url": "/dp/1"}]}
+        )
+
+    # Build >=3 history points around 200, then a cheaper 100 must flag all-time low.
+    for p in (200.0, 210.0, 205.0):
+        monkeypatch.setattr(canvas, "scrape", scrape_at(p))
+        canvas.search("mad60 he", retailers=["amazon"], base="USD", expand=False)
+    monkeypatch.setattr(canvas, "scrape", scrape_at(100.0))
+    report = canvas.search("mad60 he", retailers=["amazon"], base="USD", expand=False)
+    hit = next(h for h in report["hits"] if h.retailer == "Amazon")
+    assert hit.hist_count >= 3
+    assert hit.all_time_low is True
+    assert hit.hist_avg is not None
+
+
+def test_canvas_history_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(canvas.config, "CANVAS_HISTORY", False)
+    mapping = {"amazon": [{"title": "MAD60 HE Keyboard", "price": 100.0, "currency": "USD", "url": "/dp/1"}]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("mad60 he", retailers=["amazon"], base="USD", expand=False)
+    hit = next(h for h in report["hits"] if h.retailer == "Amazon")
+    assert hit.hist_count == 0 and hit.all_time_low is False
