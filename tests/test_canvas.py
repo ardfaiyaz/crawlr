@@ -432,3 +432,49 @@ def test_titles_not_over_grouped():
         H("B", "Logitech G Pro X Superlight", 2.0, "PHP", "u2", 2.0, 0.9),
     ]
     assert len(canvas.group_hits(hits)) == 2  # different models stay separate
+
+
+
+def test_canvas_deal_pct(monkeypatch):
+    mapping = {"amazon": [
+        {"title": "MAD60 HE A", "price": 100.0, "currency": "USD", "url": "/p/1"},
+        {"title": "MAD60 HE B", "price": 200.0, "currency": "USD", "url": "/p/2"},
+        {"title": "MAD60 HE C", "price": 300.0, "currency": "USD", "url": "/p/3"},
+    ]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("mad60 he", retailers=["amazon"], base="USD", expand=False)
+    priced = [h for h in report["hits"] if h.converted is not None]
+    cheapest = min(priced, key=lambda h: h.converted)
+    assert cheapest.deal_pct == 50.0  # 100 is 50% below the 200 median
+
+
+def test_group_by_gtin_ignores_titles():
+    H = canvas.CanvasHit
+    a = H("Shopee", "Keyboard A", 100.0, "USD", "u1", 100.0, 0.9, gtin="1234567890123")
+    b = H("Lazada", "Totally Different Name", 120.0, "USD", "u2", 120.0, 0.9, gtin="1234567890123")
+    assert len(canvas.group_hits([a, b])) == 1  # same barcode = same product
+
+
+def test_canvas_watch_registers(monkeypatch):
+    from typer.testing import CliRunner
+
+    from crawlr import storage
+    from crawlr.cli import app
+
+    mapping = {"amazon": [{"title": "MAD60 HE Keyboard", "price": 100.0, "currency": "USD", "url": "/dp/123"}]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    result = CliRunner().invoke(
+        app,
+        ["canvas", "mad60 he", "--retailers", "amazon", "--country", "us",
+         "--watch", "--target", "5000"],
+    )
+    assert result.exit_code == 0, result.output
+    watched = storage.watchlist()
+    assert any("amazon.com" in (row.get("url") or "") for row in watched)
+
+
+def test_report_exposes_strategies_used(monkeypatch):
+    mapping = {"amazon": [{"title": "MAD60 HE Keyboard", "price": 100.0, "currency": "USD", "url": "/p/1"}]}
+    monkeypatch.setattr(canvas, "scrape", _fake_scrape(mapping))
+    report = canvas.search("mad60 he", retailers=["amazon"], base="USD", expand=False)
+    assert "selectors" in report["strategies_used"]

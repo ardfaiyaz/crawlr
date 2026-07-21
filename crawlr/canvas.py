@@ -26,7 +26,7 @@ from urllib.parse import quote_plus, urldefrag, urljoin
 
 import httpx
 
-from . import config, currency, structured
+from . import config, currency, identity, strategies
 from .extractor import scrape
 from .verticals import ecommerce
 
@@ -63,6 +63,10 @@ class CanvasHit:
     in_stock: bool | None = None
     seller: str | None = None
     official: bool = False            # official-store / mall badge
+    sku: str | None = None            # canonical identity signals
+    gtin: str | None = None
+    brand: str | None = None
+    deal_pct: float | None = None     # % below the cross-store median (+ = cheaper)
 
 
 # --- Structured-API search adapters -----------------------------------------
@@ -818,35 +822,10 @@ def _top_matches(
     ]
 
 
-def _jsonld_products(html: str, base_url: str) -> list[dict]:
-    """Products parsed from a page's embedded JSON-LD — the structured-data
-    strategy that works on many stores where CSS selectors find nothing."""
-    if not html:
-        return []
-    try:
-        prods = structured.extract_product_list(html)
-    except Exception:  # pragma: no cover - defensive
-        return []
-    out: list[dict] = []
-    for p in prods:
-        purl = p.get("url") or ""
-        if purl:
-            purl = urljoin(base_url, str(purl))
-        reviews = p.get("review_count")
-        rating = p.get("rating")
-        out.append(
-            {
-                "title": p.get("title"),
-                "price": p.get("price"),
-                "original_price": p.get("original_price"),
-                "currency": p.get("currency"),
-                "url": purl or base_url,
-                "image": p.get("image"),
-                "rating": rating if isinstance(rating, (int, float)) else None,
-                "reviews": int(reviews) if isinstance(reviews, (int, float)) else None,
-            }
-        )
-    return out
+def _str_or_none(value: object) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value).strip() or None
 
 
 def _search_one(
@@ -857,35 +836,46 @@ def _search_one(
     rates: dict,
     per_store: int,
     force_js: bool,
-) -> tuple[str, list[CanvasHit]]:
+) -> tuple[str, list[CanvasHit], list[str]]:
     """Search a single retailer for ``search_query`` but rank/keep results by
     similarity to ``score_query`` (the user's original query), so expanded
     variants widen coverage without dragging in off-target products. Returns
-    ``(status, hits)`` — status is ok/blocked/error/nomatch. Never raises."""
+    ``(status, hits, strategies_used)`` — status is ok/blocked/error/nomatch.
+    Never raises."""
     url = retailer.search_url.format(q=quote_plus(search_query))
+    used: list[str] = []
 
     # 1) Prefer the store's structured JSON API (reliable products + prices).
     records: list[dict] = []
     if retailer.adapter is not None:
         try:
             records = retailer.adapter(search_query) or []
+            if records:
+                used.append("store_api")
         except Exception as exc:  # API changed / blocked -> fall back to HTML
             logger.info("Canvas: %s API adapter failed (%s); trying HTML", retailer.name, exc)
             records = []
 
-    # 2) Fall back to the HTML search page. On one fetch we run BOTH embedded
-    #    JSON-LD extraction and the self-healing selector extractor (auto
-    #    JS-rendered if needed), then merge — more coverage than either alone.
+    # 2) Fall back to the HTML search page. On a single fetch we run the whole
+    #    extraction waterfall (JSON-LD, framework hydration state, inline JSON)
+    #    plus the self-healing selector extractor — auto JS-rendered if needed —
+    #    and merge everything. If one strategy finds nothing, others usually do.
     if not records:
         try:
             result = scrape(url, ecommerce.PRODUCT_LIST_SCHEMA, force_js=force_js)
         except Exception as exc:  # one retailer failing must not stop the canvas
             logger.warning("Canvas: %s failed: %s", retailer.name, exc)
-            return "error", []
+            return "error", [], used
         if getattr(result, "blocked", False):
             logger.warning("Canvas: %s blocked or unreachable", retailer.name)
-            return "blocked", []
-        records = _jsonld_products(getattr(result, "html", "") or "", result.url) + result.records
+            return "blocked", [], used
+        structured_recs, strat_used = strategies.extract_products(
+            getattr(result, "html", "") or "", result.url
+        )
+        used.extend(strat_used)
+        if result.records:
+            used.append("selectors")
+        records = structured_recs + result.records
 
     hits: list[CanvasHit] = []
     for match in _top_matches(score_query, records, per_store, search_url=url):
@@ -917,9 +907,12 @@ def _search_one(
                 in_stock=rec.get("in_stock"),
                 seller=rec.get("seller"),
                 official=bool(rec.get("official")),
+                sku=_str_or_none(rec.get("sku")),
+                gtin=_str_or_none(rec.get("gtin")),
+                brand=_str_or_none(rec.get("brand")),
             )
         )
-    return ("ok" if hits else "nomatch"), hits
+    return ("ok" if hits else "nomatch"), hits, used
 
 
 def _expand_query(query: str) -> list[str]:
@@ -972,34 +965,19 @@ def _sort_hits(hits: list[CanvasHit], sort: str) -> list[CanvasHit]:
     return hits
 
 
-def _titles_similar(a: str, b: str) -> bool:
-    """True if two normalized titles likely name the *same* product. Kept tight
-    so different models (G502 vs G Pro X) don't get lumped together."""
-    if a == b:
-        return True
-    # One title fully contains the other's significant words (variant naming).
-    sa = [w for w in a.split() if len(w) > 1]
-    sb = [w for w in b.split() if len(w) > 1]
-    if sa and sb:
-        shorter, longer = (sa, b) if len(sa) <= len(sb) else (sb, a)
-        if all(w in longer for w in shorter):
-            return True
-    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.82
-
-
 def group_hits(hits: list[CanvasHit]) -> list[list[CanvasHit]]:
     """Cluster the same product across shops so users can compare prices, like
-    PCPartPicker. Greedy fuzzy grouping on normalized titles; each group is
-    sorted cheapest-first, and groups are ordered by their cheapest price."""
+    PCPartPicker. Uses the product-identity resolver (GTIN/SKU/brand+model) so
+    different models aren't merged. Each group is cheapest-first; groups are
+    ordered by their cheapest price."""
     groups: list[dict] = []
     for h in hits:
-        nt = _norm(h.title)
         for g in groups:
-            if _titles_similar(nt, g["key"]):
+            if identity.same_product(g["rep"], h):
                 g["hits"].append(h)
                 break
         else:
-            groups.append({"key": nt, "hits": [h]})
+            groups.append({"rep": h, "hits": [h]})
 
     def cheapest(hs: list[CanvasHit]) -> float:
         vals = [x.converted for x in hs if x.converted is not None]
@@ -1072,14 +1050,16 @@ def search(
             if brand_store.name not in existing:
                 selected.append(brand_store)
 
+    strategies_used: set[str] = set()
+
     def _run_all(q: str) -> tuple[list[CanvasHit], list[str], list[str]]:
         hits_: list[CanvasHit] = []
         blocked_: list[str] = []
         errored_: list[str] = []
 
-        def _run(r: Retailer) -> tuple[Retailer, str, list[CanvasHit]]:
-            status, rhits = _search_one(r, q, query, base_ccy, rates, per, force_js)
-            return r, status, rhits
+        def _run(r: Retailer) -> tuple[Retailer, str, list[CanvasHit], list[str]]:
+            status, rhits, used = _search_one(r, q, query, base_ccy, rates, per, force_js)
+            return r, status, rhits, used
 
         workers = min(len(selected), config.CANVAS_WORKERS) if selected else 1
         if workers > 1:
@@ -1089,11 +1069,12 @@ def search(
                 outcomes = list(pool.map(_run, selected))
         else:
             outcomes = [_run(r) for r in selected]
-        for retailer, status, rhits in outcomes:
+        for retailer, status, rhits, used in outcomes:
             if status == "blocked":
                 blocked_.append(retailer.name)
             elif status == "error":
                 errored_.append(retailer.name)
+            strategies_used.update(used)
             hits_.extend(rhits)
         return hits_, blocked_, errored_
 
@@ -1114,6 +1095,14 @@ def search(
                 if key not in seen:
                     seen.add(key)
                     hits.append(h)
+
+    # Deal scoring: how far below the cross-store median each listing sits.
+    _stats = _price_stats(hits)
+    median = _stats.get("median")
+    if median:
+        for h in hits:
+            if h.converted is not None:
+                h.deal_pct = round((median - h.converted) / median * 100, 1)
 
     _sort_hits(hits, sort)
     # Cap the final results per store (expansion may have gathered extras).
@@ -1136,6 +1125,7 @@ def search(
         "queries_tried": tried,
         "blocked": blocked,
         "errored": errored,
+        "strategies_used": sorted(strategies_used),
         "shops": len({h.retailer for h in hits}),
         "stats": _price_stats(hits),
         "hits": hits,

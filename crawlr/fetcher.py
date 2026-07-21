@@ -198,6 +198,32 @@ def _fetch_static(url: str) -> FetchResult:
         return _handle(client.get(url))
 
 
+_MOBILE_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+)
+
+
+def _fetch_mobile(url: str) -> FetchResult:
+    """A single static GET with a mobile User-Agent. Mobile pages are often
+    lighter and less aggressively bot-protected, so this sometimes clears a
+    desktop block without needing a headless browser."""
+    headers = {"User-Agent": _MOBILE_UA, "Accept": "text/html,application/xhtml+xml"}
+    proxy = _next_proxy()
+    if proxy:
+        with httpx.Client(
+            headers=headers, timeout=FETCH.timeout_seconds, follow_redirects=True, proxy=proxy
+        ) as client:
+            resp = client.get(url)
+    else:
+        resp = _get_shared_client().get(url, headers=headers)
+    blocked = resp.status_code in (401, 403, 429)
+    return FetchResult(
+        url=str(resp.url), html=resp.text, status_code=resp.status_code,
+        blocked=blocked, blocked_reason=f"http {resp.status_code}" if blocked else None,
+    )
+
+
 _chromium_ready = False
 
 
@@ -343,6 +369,13 @@ def fetch(url: str, force_js: bool = False) -> FetchResult:
     if reason:
         result.blocked = True
         result.blocked_reason = reason
+        # Cheap tier first: retry with a mobile UA (lighter, less protected).
+        try:
+            mobile = _fetch_mobile(url)
+            if not mobile.blocked and not detect_block(mobile.status_code, mobile.html):
+                return mobile
+        except httpx.HTTPError:
+            pass
         if AUTO_JS:
             try:
                 rendered = _fetch_js(url)

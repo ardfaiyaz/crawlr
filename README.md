@@ -543,11 +543,29 @@ the Philippines, it automatically searches Lazada PH, Shopee PH, and Zalora PH. 
 off with `CRAWLR_GEO=false` (fully offline). Add your own shops any time via a YAML file
 (`CRAWLR_CANVAS_RETAILERS`).
 
-**Behaves like a shopping aggregator, not a scraper.** For each store canvas tries multiple
-strategies in order — the store's **structured JSON search API** first (Lazada's `?ajax=true`,
-Shopee's search API, plus generic **Shopify** and **WooCommerce** Store APIs), then **embedded
-JSON-LD** product data, then HTML scraping with automatic JS rendering. So **Lazada/Shopee and many
-smaller PH shops return real products with prices for free**, no fetch provider needed.
+**Behaves like a shopping aggregator, not a scraper.** Canvas runs a **multi-strategy extraction
+engine** over every store and merges whatever works — it never depends on one technique:
+
+1. the store's **structured JSON search API** (Lazada `?ajax=true`, Shopee, generic **Shopify** &
+   **WooCommerce** Store APIs),
+2. **embedded JSON-LD** product data,
+3. **framework hydration state** — `__NEXT_DATA__` (Next.js), `__NUXT__`, `__APOLLO_STATE__`,
+   `__INITIAL_STATE__`/`__PRELOADED_STATE__` (Redux) — which carries full product JSON on many SPA
+   sites that render *nothing* in raw HTML,
+4. a **generic inline-JSON scan** of `<script>` tags, and
+5. the **self-healing CSS selector** extractor.
+
+All of these run automatically on a single fetch and are merged, so **Lazada/Shopee and many smaller
+PH shops return real products with prices for free**, no fetch provider needed. On a block, canvas
+also retries with a **mobile user-agent** (lighter, less protected) before escalating to JS.
+
+**Accurate matching & grouping.** A **product-identity resolver** decides when two listings are the
+*same* product — by **GTIN/barcode** first, then **SKU + brand**, then **brand + model code**
+(e.g. `g502`, `60he`) — so `--group` compares the same item across shops without merging different
+models.
+
+**Deal scoring.** Every listing is scored against the cross-store **median**, and the best buy is
+flagged (e.g. *"18% below median — good time to buy"*).
 
 It also:
 
@@ -568,6 +586,17 @@ It also:
 crawlr canvas "mechanical keyboard" --per-store 8 --sort discount   # biggest deals first
 crawlr canvas "rtx 5070" --sort popular                             # best-selling first
 crawlr canvas "logitech g pro x superlight" --group                 # compare the same item across shops
+crawlr canvas "logitech g pro x superlight" --watch --target 5000   # track every store, alert on a drop
+```
+
+### Close the loop: find it, then get alerted
+
+`--watch` turns a canvas search into tracked watches across **every** store it found, reusing the
+normal monitor + alert stack. Set `--target` to be pinged when any store drops to your price:
+
+```bash
+crawlr canvas "logitech g pro x superlight" --watch --target 5000
+crawlr monitor --daemon        # keep checking; alerts fire via Discord/Telegram/etc.
 ```
 
 > **Heads-up:** the toughest marketplaces (Amazon, or Shopee from a datacenter/VPN IP) may still

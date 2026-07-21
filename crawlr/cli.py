@@ -387,6 +387,15 @@ def canvas(
     group: bool = typer.Option(
         False, "--group", help="Group the same product across shops to compare prices"
     ),
+    watch: bool = typer.Option(
+        False, "--watch", help="Track every result as a watch so you get alerted on price drops"
+    ),
+    target: float = typer.Option(
+        None, "--target", help="With --watch: alert when any store's price drops to/below this"
+    ),
+    watch_trigger: str = typer.Option(
+        None, "--trigger", help="With --watch: trigger (price_drop|price_below|any_change|…)"
+    ),
     js: bool = typer.Option(False, help="Force JS rendering (auto-used when a page is blocked)"),
 ) -> None:
     """Find a product across many retailers and compare prices ("canvas").
@@ -465,6 +474,50 @@ def canvas(
                 f"[dim]{len(hits)} listing(s) across {report.get('shops', 0)} shop(s).[/dim]"
             )
 
+    def _best_line() -> None:
+        best = next((h for h in hits if h.converted is not None), None)
+        if not best:
+            return
+        deal = ""
+        if best.deal_pct and best.deal_pct > 0:
+            deal = f" [green]({best.deal_pct:g}% below median — good time to buy)[/green]"
+        console.print(
+            f"[green]Best deal:[/green] {best.retailer} — {best.title} "
+            f"at {base} {best.converted:g}{deal}\n[dim]{best.url}[/dim]"
+        )
+
+    # Close the loop: register every result as a tracked watch, so the existing
+    # scheduler + alert sinks fire when any store drops. Reuses `crawlr monitor`.
+    if watch:
+        if target is not None:
+            wtrigger = TriggerType.PRICE_BELOW
+        elif watch_trigger:
+            wtrigger = TriggerType(watch_trigger)
+        else:
+            wtrigger = TriggerType.PRICE_DROP
+        storage.init_db()
+        added, seen_urls = 0, set()
+        for h in hits[:25]:  # cap so a broad search can't flood the watchlist
+            canon = (h.url or "").split("?")[0]
+            if not canon or canon in seen_urls:
+                continue
+            seen_urls.add(canon)
+            try:
+                storage.add_site(
+                    MonitoredSite(
+                        url=h.url, schema_name="product",
+                        trigger=wtrigger, target_price=target,
+                    )
+                )
+                added += 1
+            except Exception:  # skip an unwatchable URL, keep going
+                continue
+        tgt = f" (alert at/below {base} {target:g})" if target is not None else ""
+        console.print(
+            f"[green]Now watching {added} listing(s)[/green]{tgt} — "
+            "run `crawlr monitor --daemon` to start checking."
+        )
+
     # Grouped view: one table, the same product across shops, cheapest-first.
     if group:
         groups = canvas_mod.group_hits(hits)
@@ -490,6 +543,7 @@ def canvas(
                 )
         console.print(gtable)
         _stats_line()
+        _best_line()
         return
 
     def _compact(n: int | None) -> str:
@@ -523,12 +577,7 @@ def canvas(
     console.print(table)
 
     _stats_line()
-    best = next((h for h in hits if h.converted is not None), None)
-    if best:
-        console.print(
-            f"[green]Cheapest:[/green] {best.retailer} — {best.title} "
-            f"at {best.converted:g} {base}\n[dim]{best.url}[/dim]"
-        )
+    _best_line()
 
 
 @app.command()

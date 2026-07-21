@@ -6,6 +6,28 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0]
+
+### Added
+- **Multi-strategy extraction engine** (`crawlr/strategies.py`) — every store is
+  parsed with a waterfall that runs automatically and merges results, so canvas
+  never depends on one technique: store JSON APIs, **embedded JSON-LD**,
+  **framework hydration state** (`__NEXT_DATA__`, `__NUXT__`, `__APOLLO_STATE__`,
+  `__INITIAL_STATE__`/`__PRELOADED_STATE__`), a generic **inline-JSON scan**, and
+  the self-healing selector extractor — all on a single fetch. The report exposes
+  `strategies_used`.
+- **Product-identity resolver** (`crawlr/identity.py`) — matches listings by
+  GTIN/barcode → SKU + brand → brand + model code (e.g. `g502`, `60he`). Canvas
+  grouping now uses it, so `--group` compares the same product across shops
+  without merging different models.
+- **Close the loop: `crawlr canvas --watch [--target N] [--trigger …]`** — turns a
+  canvas search into tracked watches across every store it found, reusing the
+  existing monitor + alert stack (Discord/Telegram/etc.).
+- **Deal scoring** — every listing is scored against the cross-store median, and
+  the best buy is flagged ("X% below median — good time to buy").
+- **Mobile user-agent acquisition fallback** — on a block, Crawlr retries with a
+  mobile UA (lighter, less protected) before escalating to a headless browser.
+
 ## [0.7.1]
 
 ### Changed

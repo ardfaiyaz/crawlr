@@ -20,7 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
-        <span class="ver">v0.7.1</span>
+        <span class="ver">v0.8.0</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -239,12 +239,25 @@
       <code>CRAWLR_CANVAS_PER_STORE</code>). Search-page chrome ("Results for …", bare query echoes)
       is filtered out for accuracy, and stores that block bots are listed with a hint to turn on a
       <a href="#config-provider">fetch provider</a>.</p>
-      <p><strong>Behaves like a shopping aggregator, not a scraper.</strong> For each store, canvas
-      tries several strategies in order — the store's own <strong>structured JSON search API</strong>
-      first (Lazada's <code>?ajax=true</code>, Shopee's search API, plus generic <strong>Shopify</strong>
-      and <strong>WooCommerce</strong> Store APIs), then <strong>embedded JSON-LD</strong> product data,
-      then HTML scraping with automatic JS rendering. So <strong>Lazada/Shopee and many smaller PH
-      shops return real products with prices for free</strong>, no fetch provider needed.</p>
+      <p><strong>Behaves like a shopping aggregator, not a scraper.</strong> Canvas runs a
+      <strong>multi-strategy extraction engine</strong> over every store and merges whatever works —
+      it never depends on one technique: (1) the store's <strong>structured JSON search API</strong>
+      (Lazada <code>?ajax=true</code>, Shopee, generic <strong>Shopify</strong> &amp;
+      <strong>WooCommerce</strong>), (2) <strong>embedded JSON-LD</strong>, (3) <strong>framework
+      hydration state</strong> (<code>__NEXT_DATA__</code>, <code>__NUXT__</code>,
+      <code>__APOLLO_STATE__</code>, <code>__INITIAL_STATE__</code>) that carries full product JSON on
+      SPA sites rendering nothing in raw HTML, (4) a generic <strong>inline-JSON scan</strong>, and
+      (5) the <strong>self-healing CSS selector</strong> extractor. All run on a single fetch and are
+      merged, so <strong>Lazada/Shopee and many smaller PH shops return real products for free</strong>.
+      On a block, canvas also retries with a <strong>mobile user-agent</strong> before escalating to JS.</p>
+      <p><strong>Accurate matching.</strong> A <strong>product-identity resolver</strong> decides when
+      two listings are the same product — by GTIN/barcode, then SKU + brand, then brand + model code
+      (<code>g502</code>, <code>60he</code>) — so <code>--group</code> compares the same item across
+      shops without merging different models. Every listing is <strong>deal-scored</strong> against
+      the cross-store median.</p>
+      <p><strong>Close the loop:</strong> <code>--watch --target 5000</code> turns a search into
+      tracked watches across every store it found, so the normal monitor + alert stack pings you when
+      any store drops.</p>
       <ul>
         <li><strong>Many stores</strong> — Tier-1 marketplaces, local PH shops (DataBlitz, DynaQuest,
         EasyPC, PC Express, GameXtreme, Villman, Watsons, SM) and Temu/Banggood/AliExpress, searched
