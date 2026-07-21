@@ -20,7 +20,7 @@
       <a class="brand" href="index.html">
         <img src="logo.png" alt="Crawlr logo">
         <span class="word">crawlr</span>
-        <span class="ver">v0.9.0</span>
+        <span class="ver">v0.10.0</span>
       </a>
       <div class="nav-links">
         <a href="index.html">Home</a>
@@ -134,6 +134,7 @@
           <tr><td><code>crawlr scrape &lt;url&gt;</code></td><td>One-off scrape (no monitoring) — great for testing</td></tr>
           <tr><td><code>crawlr fx</code></td><td>Show currency rates, or convert an amount</td></tr>
           <tr><td><code>crawlr serve</code></td><td>Open the web dashboard at <code>http://localhost:8000</code></td></tr>
+          <tr><td><code>crawlr telegram-bot</code></td><td>Run the Telegram price bot (chat a product → get a comparison)</td></tr>
           <tr><td><code>crawlr doctor</code></td><td>Check that your setup works</td></tr>
           <tr><td><code>crawlr test-alert</code></td><td>Send a test notification so you know alerts reach you</td></tr>
           <tr><td><code>crawlr --version</code></td><td>Print the installed Crawlr version (also <code>-V</code>)</td></tr>
@@ -467,6 +468,8 @@
           <tr><td><code>CRAWLR_RESPECT_ROBOTS</code></td><td><code>true</code></td><td>Honor robots.txt</td></tr>
           <tr><td><code>CRAWLR_AUTO_JS</code></td><td><code>true</code></td><td>Auto-render blocked / JS-only pages with the built-in headless browser</td></tr>
           <tr><td><code>CRAWLR_AUTO_PLAYWRIGHT_INSTALL</code></td><td><code>true</code></td><td>Auto-download the Chromium browser binary on first JS render</td></tr>
+          <tr><td><code>CRAWLR_IMPERSONATE</code></td><td><code>true</code></td><td>On a block, retry with a real-Chrome TLS/JA3 fingerprint (needs <code>crawlr[impersonate]</code>)</td></tr>
+          <tr><td><code>CRAWLR_TELEGRAM_BOT_TOKEN</code></td><td>—</td><td>Bot token (from @BotFather) for <code>crawlr telegram-bot</code></td></tr>
           <tr><td><code>CRAWLR_FX_BASE</code></td><td><code>USD</code></td><td>Currency that compare/canvas convert prices into</td></tr>
           <tr><td><code>CRAWLR_FX_LIVE</code></td><td><code>false</code></td><td>Fetch live FX rates (cached) instead of the pinned table</td></tr>
           <tr><td><code>CRAWLR_FX_API_URL</code></td><td>open.er-api.com</td><td>Live FX endpoint (<code>{"rates": {CODE: perUSD}}</code>)</td></tr>

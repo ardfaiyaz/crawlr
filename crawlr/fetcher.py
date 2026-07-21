@@ -27,7 +27,7 @@ from selectolax.parser import HTMLParser
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from . import providers
-from .config import ANTIBOT, AUTO_JS, AUTO_PLAYWRIGHT_INSTALL, FETCH
+from .config import ANTIBOT, AUTO_JS, AUTO_PLAYWRIGHT_INSTALL, FETCH, IMPERSONATE
 
 logger = logging.getLogger("crawlr.fetcher")
 
@@ -204,6 +204,37 @@ _MOBILE_UA = (
 )
 
 
+def _fetch_impersonate(url: str) -> FetchResult | None:
+    """Fetch with a real-Chrome TLS/JA3 fingerprint via the optional `curl_cffi`
+    package. Beats many anti-bot systems that flag a plain httpx client — without
+    a headless browser. Returns None if curl_cffi isn't installed or the request
+    fails, so callers fall through to the next tier."""
+    if not IMPERSONATE:
+        return None
+    try:
+        from curl_cffi import requests as creq  # type: ignore[import-untyped]
+    except Exception:
+        return None
+    proxy = _next_proxy()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    try:
+        resp = creq.get(
+            url,
+            impersonate="chrome",
+            timeout=FETCH.timeout_seconds,
+            proxies=proxies,  # type: ignore[arg-type]
+            allow_redirects=True,
+        )
+    except Exception as exc:  # pragma: no cover - network / optional dep
+        logger.info("Impersonated fetch failed for %s: %s", url, exc)
+        return None
+    blocked = resp.status_code in (401, 403, 429)
+    return FetchResult(
+        url=str(resp.url), html=resp.text, status_code=resp.status_code,
+        blocked=blocked, blocked_reason=f"http {resp.status_code}" if blocked else None,
+    )
+
+
 def _fetch_mobile(url: str) -> FetchResult:
     """A single static GET with a mobile User-Agent. Mobile pages are often
     lighter and less aggressively bot-protected, so this sometimes clears a
@@ -369,7 +400,16 @@ def fetch(url: str, force_js: bool = False) -> FetchResult:
     if reason:
         result.blocked = True
         result.blocked_reason = reason
-        # Cheap tier first: retry with a mobile UA (lighter, less protected).
+        # Tier 1: real-Chrome TLS/JA3 impersonation (curl_cffi, if installed) —
+        # beats many anti-bot systems cheaply, no browser needed.
+        impersonated = _fetch_impersonate(url)
+        if (
+            impersonated is not None
+            and not impersonated.blocked
+            and not detect_block(impersonated.status_code, impersonated.html)
+        ):
+            return impersonated
+        # Tier 2: retry with a mobile UA (lighter, less protected).
         try:
             mobile = _fetch_mobile(url)
             if not mobile.blocked and not detect_block(mobile.status_code, mobile.html):

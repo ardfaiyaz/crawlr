@@ -130,6 +130,7 @@ rules:
 | `crawlr pause <id>` / `resume <id>` | Temporarily stop / restart tracking one item |
 | `crawlr unwatch <id>` | Stop tracking an item and delete its history |
 | `crawlr serve` | Open the web dashboard at `http://localhost:8000` |
+| `crawlr telegram-bot` | Run the Telegram price bot (chat a product → get a comparison) |
 | `crawlr doctor` | Check that your setup works |
 | `crawlr test-alert` | Send a test notification so you know alerts reach you |
 | `crawlr --version` | Print the installed Crawlr version (also `-V`) |
@@ -226,6 +227,8 @@ Full reference:
 | `CRAWLR_RESPECT_ROBOTS` | `true` | Honor robots.txt |
 | `CRAWLR_AUTO_JS` | `true` | Auto-render blocked / JS-only pages with the built-in headless browser |
 | `CRAWLR_AUTO_PLAYWRIGHT_INSTALL` | `true` | Auto-download the Chromium browser binary on first JS render |
+| `CRAWLR_IMPERSONATE` | `true` | On a block, retry with a real-Chrome TLS/JA3 fingerprint (needs `crawlr[impersonate]`) |
+| `CRAWLR_TELEGRAM_BOT_TOKEN` | — | Bot token (from @BotFather) for `crawlr telegram-bot` |
 | `CRAWLR_FX_BASE` | `USD` | Currency that `compare` converts prices into |
 | `CRAWLR_FX_LIVE` | `false` | Fetch live FX rates (cached) instead of the pinned table |
 | `CRAWLR_FX_API_URL` | `open.er-api.com` | Live FX endpoint (`{"rates": {CODE: perUSD}}`) |
@@ -490,6 +493,11 @@ Most providers have a free tier to start. For any service that isn't built in, u
 (`CRAWLR_FETCH_PROVIDER_ENDPOINT`, `_URL_PARAM`, `_KEY_PARAM`/`_KEY_HEADER`, `_EXTRA`,
 `_RESPONSE`/`_HTML_PATH`). Even more reliable and fully legal: a marketplace's **official API**.
 
+**Free tier before that:** install `pip install "crawlr[impersonate]"` and, on a block, Crawlr
+automatically retries with a **real-Chrome TLS/JA3 fingerprint** (via `curl_cffi`) — which clears
+many Cloudflare/Akamai blocks with no browser and no paid service. Disable with
+`CRAWLR_IMPERSONATE=false`.
+
 ## Canvas — shop a product across many stores
 
 Don't have a link, just a product in mind (say a *Wooting 60HE*)? `crawlr canvas` searches
@@ -607,6 +615,27 @@ crawlr monitor --daemon        # keep checking; alerts fire via Discord/Telegram
 > block automated requests. When that happens Crawlr says so explicitly, and a
 > [fetch provider](#use-a-fetch-provider-recommended-for-marketplaces)
 > (`CRAWLR_FETCH_PROVIDER` + key) is the most reliable fallback.
+
+## Telegram bot — canvas in a chat
+
+Most shoppers will never `pip install` anything, but everyone has a messaging app. Run Crawlr as a
+Telegram bot: users send a product name and get a live price comparison; `/watch` to be alerted on a
+drop. It uses the Bot API directly (no extra dependency) via long polling.
+
+1. Create a bot with **@BotFather** in Telegram and copy the token.
+2. Set the token and run the bot:
+
+```bash
+export CRAWLR_TELEGRAM_BOT_TOKEN="123456:ABC-your-token"
+crawlr telegram-bot
+```
+
+Then in Telegram:
+
+- send `logitech g pro x superlight` → get a ranked cross-store comparison with the best deal
+  (and an *all-time low* flag once history builds),
+- send `/watch logitech g pro x superlight 5000` → track every store and get alerted when any drops
+  to ₱5000 (keep `crawlr monitor --daemon` running so alerts fire).
 
 ## Legal & responsible use
 

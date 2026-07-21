@@ -1,6 +1,6 @@
 [project]
 name = "crawlr"
-version = "0.9.0"
+version = "0.10.0"
 description = "Crawlr: an AI-powered, self-healing web scraper with an e-commerce price-intelligence vertical"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -50,6 +50,8 @@ dependencies = [
 # so `pip install crawlr` already includes the headless browser engine.
 js = ["playwright>=1.44"]
 postgres = ["psycopg[binary]>=3.1", "psycopg-pool>=3.2"]
+# Real-Chrome TLS/JA3 impersonation to get past more anti-bot without a browser.
+impersonate = ["curl_cffi>=0.7"]
 dev = ["pytest>=8.2", "pytest-cov>=5.0", "ruff>=0.4", "mypy>=1.10"]
 
 [project.urls]

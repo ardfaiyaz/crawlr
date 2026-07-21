@@ -123,6 +123,11 @@ AUTO_PLAYWRIGHT_INSTALL = (
     os.getenv("CRAWLR_AUTO_PLAYWRIGHT_INSTALL", "true").lower() == "true"
 )
 
+# On a block, retry with a real-Chrome TLS/JA3 fingerprint via the optional
+# `curl_cffi` package (pip install 'crawlr[impersonate]'). This beats many
+# Cloudflare/Akamai blocks without a headless browser. No-op if not installed.
+IMPERSONATE = os.getenv("CRAWLR_IMPERSONATE", "true").lower() == "true"
+
 # ---------------------------------------------------------------------------
 # Canvas: cross-retailer product search / comparison
 # ---------------------------------------------------------------------------
@@ -167,6 +172,10 @@ CANVAS_HISTORY_DAYS = max(0, int(os.getenv("CRAWLR_CANVAS_HISTORY_DAYS", "90")))
 # Hosted API: when set, the JSON API requires this key (X-API-Key or Bearer).
 # Left unset, the API is open (fine for local use).
 API_KEY = os.getenv("CRAWLR_API_KEY", "") or None
+
+# Interactive Telegram bot front-end for canvas (`crawlr telegram-bot`). Create a
+# bot via @BotFather and put its token here. Separate from the alert-sink token.
+TELEGRAM_BOT_TOKEN = os.getenv("CRAWLR_TELEGRAM_BOT_TOKEN") or None
 
 
 def _split_csv(raw: str) -> list[str]:

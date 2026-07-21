@@ -6,6 +6,20 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0]
+
+### Added
+- **Telegram bot front-end** (`crawlr telegram-bot`) — the distribution layer.
+  Users chat a product name and get a live cross-store price comparison (with
+  all-time-low flags); `/watch <product> [target]` tracks every store and alerts
+  on a drop via the existing monitor stack. Talks to the Bot API directly over
+  httpx (no extra dependency); set `CRAWLR_TELEGRAM_BOT_TOKEN` from @BotFather.
+- **TLS/JA3 impersonation acquisition tier** — on a block, Crawlr now retries with
+  a real-Chrome fingerprint via the optional `curl_cffi` package
+  (`pip install "crawlr[impersonate]"`), clearing many Cloudflare/Akamai blocks
+  with no browser and no paid service. Runs before the mobile-UA and headless
+  tiers; no-op if not installed. Toggle with `CRAWLR_IMPERSONATE`.
+
 ## [0.9.0]
 
 ### Added

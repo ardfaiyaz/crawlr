@@ -913,6 +913,32 @@ def serve(
     uvicorn.run("crawlr.api:app", host=host, port=port, reload=False)
 
 
+@app.command(name="telegram-bot")
+def telegram_bot(
+    token: str = typer.Option(None, "--token", help="Bot token (default: CRAWLR_TELEGRAM_BOT_TOKEN)"),
+) -> None:
+    """Run the Telegram price bot: users chat a product name, get a comparison.
+
+    Create a bot with @BotFather, then set CRAWLR_TELEGRAM_BOT_TOKEN (or pass
+    --token). Users can also `/watch <product> [target]` to be alerted on drops.
+    """
+    from . import config, telegram
+
+    tok = token or config.TELEGRAM_BOT_TOKEN
+    if not tok:
+        console.print(
+            "[red]No bot token.[/red] Create one with @BotFather, then set "
+            "CRAWLR_TELEGRAM_BOT_TOKEN or pass --token."
+        )
+        raise typer.Exit(1)
+    storage.init_db()
+    console.print("[green]Crawlr Telegram bot running.[/green] Press Ctrl+C to stop.")
+    try:
+        telegram.run(tok)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Bot stopped.[/dim]")
+
+
 # ---------------------------------------------------------------------------
 # Rendering helpers
 # ---------------------------------------------------------------------------

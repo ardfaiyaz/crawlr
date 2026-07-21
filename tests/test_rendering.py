@@ -63,6 +63,12 @@ def _patch_fetch_internals(monkeypatch):
     monkeypatch.setattr(fetcher, "_robots_allows", lambda url: True)
     monkeypatch.setattr(fetcher, "_respect_rate_limit", lambda url: None)
     monkeypatch.setattr(fetcher.providers, "enabled", lambda: False)
+    # Keep the cheap acquisition tiers offline + deterministic (they still block).
+    monkeypatch.setattr(fetcher, "_fetch_impersonate", lambda url: None)
+    monkeypatch.setattr(
+        fetcher, "_fetch_mobile",
+        lambda url: FetchResult(url=url, html="", status_code=403, blocked=True),
+    )
 
 
 def test_auto_js_escalates_on_block(monkeypatch):
@@ -120,3 +126,43 @@ def test_is_missing_browser_detection():
     assert fetcher._is_missing_browser(Exception("Executable doesn't exist at /x")) is True
     assert fetcher._is_missing_browser(Exception("please run: playwright install")) is True
     assert fetcher._is_missing_browser(Exception("net::ERR_TIMED_OUT")) is False
+
+
+
+def test_impersonate_tier_clears_block(monkeypatch):
+    _patch_fetch_internals(monkeypatch)
+    blocked = FetchResult(
+        url="https://shop.test/p", html="x", status_code=403,
+        blocked=True, blocked_reason="http 403",
+    )
+    clean = FetchResult(
+        url="https://shop.test/p",
+        html="<html><body>" + ("real product " * 40) + "</body></html>",
+        status_code=200,
+    )
+    monkeypatch.setattr(fetcher, "_fetch_static", lambda url: blocked)
+    monkeypatch.setattr(fetcher, "_fetch_impersonate", lambda url: clean)
+
+    def _no_js(url):
+        raise AssertionError("JS must not run when impersonation clears the block")
+
+    monkeypatch.setattr(fetcher, "_fetch_js", _no_js)
+    result = fetcher.fetch("https://shop.test/p")
+    assert result.status_code == 200 and result.blocked is False
+
+
+def test_impersonate_absent_is_graceful(monkeypatch):
+    # impersonate None + mobile blocked -> escalate to JS (mocked), no crash.
+    _patch_fetch_internals(monkeypatch)
+    blocked = FetchResult(
+        url="https://shop.test/p", html="x", status_code=403,
+        blocked=True, blocked_reason="http 403",
+    )
+    rendered = FetchResult(
+        url="https://shop.test/p",
+        html="<html><body>" + ("real " * 60) + "</body></html>",
+        status_code=200, rendered_with_js=True,
+    )
+    monkeypatch.setattr(fetcher, "_fetch_static", lambda url: blocked)
+    monkeypatch.setattr(fetcher, "_fetch_js", lambda url: rendered)
+    assert fetcher.fetch("https://shop.test/p").rendered_with_js is True
